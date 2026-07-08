@@ -19,8 +19,9 @@ create or replace function hash_password_sec2(password_text text)
 returns text
 language sql
 security definer
+set search_path = public, extensions
 as $$
-  select crypt(password_text, gen_salt('bf'));
+  select extensions.crypt(password_text, extensions.gen_salt('bf'));
 $$;
 
 -- ============================================================
@@ -31,8 +32,9 @@ create or replace function verificar_password_sec2(password_text text, password_
 returns boolean
 language sql
 security definer
+set search_path = public, extensions
 as $$
-  select password_hash = crypt(password_text, password_hash);
+  select password_hash = extensions.crypt(password_text, password_hash);
 $$;
 
 -- ============================================================
@@ -61,7 +63,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_usuario usuarios%rowtype;
@@ -161,7 +163,7 @@ create or replace function crear_usuario_sec2(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_rol_id uuid;
@@ -233,9 +235,6 @@ $$;
 -- ============================================================
 -- 05. USUARIO DE PRUEBA INICIAL
 -- ============================================================
-
--- Este usuario es solo para probar login inicial.
--- Luego se podrá borrar o reemplazar por datos reales.
 
 select crear_usuario_sec2(
   'DIR001',
