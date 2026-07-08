@@ -550,3 +550,297 @@ Se aprueban provisionalmente las siguientes decisiones:
 ✓ sustituir acceso por consultas PostgreSQL
 
 ✓ conservar la estructura lógica del backend
+---
+
+# AUDITORÍA 02 — Autenticación y Seguridad
+
+## Objetivo del módulo
+
+Controlar el acceso de los usuarios al sistema y determinar qué puede hacer cada uno según su rol.
+
+El sistema actual implementa autenticación propia basada en Google Sheets.
+
+Durante la migración este comportamiento se conservará funcionalmente, pero cambiará de infraestructura.
+
+---
+
+# Flujo de autenticación detectado
+
+El proceso identificado es el siguiente:
+
+Usuario
+
+↓
+
+Captura:
+
+- IDAcceso
+- Contraseña
+
+↓
+
+Se envía acción:
+
+iniciarSesion
+
+↓
+
+verificarCredenciales()
+
+↓
+
+buscarUsuarioPorIDAcceso()
+
+↓
+
+Validación de usuario activo
+
+↓
+
+Validación de contraseña
+
+↓
+
+Creación del objeto de sesión
+
+↓
+
+Respuesta JSON al frontend
+
+---
+
+# Identificador principal
+
+El sistema NO utiliza la columna ID como identidad del usuario.
+
+Utiliza:
+
+IDAcceso
+
+Esta decisión fue correcta y deberá mantenerse.
+
+Durante la migración:
+
+IDAcceso
+
+↓
+
+id_acceso
+
+seguirá siendo el identificador visible para el usuario.
+
+---
+
+# Estado del usuario
+
+Se detectó una función:
+
+usuarioEstaActivo()
+
+Su finalidad es impedir el acceso de usuarios desactivados.
+
+Actualmente interpreta múltiples valores como inactivo:
+
+- no
+- false
+- falso
+- baja
+- inactivo
+- 0
+
+La lógica deberá simplificarse en PostgreSQL utilizando un campo booleano.
+
+---
+
+# Contraseñas
+
+Estado actual
+
+Las contraseñas se almacenan en texto plano y se comparan directamente durante el inicio de sesión.
+
+Esto representa una limitación heredada de Google Sheets.
+
+---
+
+# Migración propuesta
+
+En Supabase:
+
+Las contraseñas nunca deberán almacenarse en texto plano.
+
+Se utilizará un hash criptográfico.
+
+El usuario seguirá ingresando la misma contraseña, pero la base de datos almacenará únicamente el hash.
+
+---
+
+# Contexto de sesión
+
+Después del login el backend construye un objeto de sesión con:
+
+- ID
+- IDAcceso
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+- Activo
+
+Este objeto será el equivalente al perfil del usuario autenticado.
+
+En Supabase se obtendrá mediante la sesión autenticada y consultas controladas.
+
+---
+
+# Canonicalización de roles
+
+Se detectó una normalización de nombres.
+
+Ejemplos:
+
+direccion
+
+↓
+
+Direccion
+
+dir
+
+↓
+
+Direccion
+
+doc
+
+↓
+
+Docente
+
+prefectura
+
+↓
+
+Prefectura
+
+Esta lógica evita inconsistencias históricas.
+
+En Supabase la tabla `roles` eliminará la necesidad de esta normalización.
+
+---
+
+# Validación de permisos
+
+Existe una función específica:
+
+validarRol()
+
+Su responsabilidad es impedir operaciones para usuarios sin autorización.
+
+Esta separación es correcta.
+
+En la nueva arquitectura esta validación existirá en dos niveles:
+
+Frontend:
+
+ocultar botones y opciones.
+
+Supabase:
+
+bloquear realmente el acceso mediante RLS y políticas de seguridad.
+
+---
+
+# Seguridad detectada
+
+Fortalezas
+
+✓ separación del login
+
+✓ separación de permisos
+
+✓ validación de usuario activo
+
+✓ construcción de contexto
+
+✓ normalización previa
+
+Debilidades
+
+- contraseñas en texto plano
+
+- autenticación propia
+
+- permisos dependen parcialmente del frontend
+
+---
+
+# Migración propuesta
+
+Google Sheets
+
+↓
+
+Autenticación manual
+
+↓
+
+Comparación de contraseña
+
+↓
+
+Objeto de sesión
+
+↓
+
+Frontend
+
+se transformará en:
+
+Supabase
+
+↓
+
+Autenticación segura
+
+↓
+
+Sesión firmada
+
+↓
+
+Perfil del usuario
+
+↓
+
+Políticas RLS
+
+↓
+
+Frontend
+
+---
+
+# Decisiones aprobadas
+
+✓ conservar IDAcceso como identificador visible.
+
+✓ conservar la lógica de usuario activo.
+
+✓ conservar los cuatro roles oficiales.
+
+✓ eliminar almacenamiento de contraseñas en texto plano.
+
+✓ trasladar la seguridad principal a Supabase.
+
+✓ mantener el frontend prácticamente igual.
+
+---
+
+# Riesgos identificados
+
+La autenticación será uno de los módulos con mayor cambio técnico.
+
+Aunque el comportamiento visible será el mismo para el usuario, internamente cambiará completamente la infraestructura.
+
+Esta migración deberá realizarse únicamente después de diseñar correctamente la tabla `usuarios` y las políticas RLS.
