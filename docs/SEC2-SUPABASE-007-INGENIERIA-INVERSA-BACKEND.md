@@ -2087,3 +2087,258 @@ estados_uso_permiso
 La regla más importante a conservar es:
 
 un uso utilizado no se modifica ni se borra.
+---
+
+# AUDITORÍA 06 — Notificaciones
+
+## Objetivo
+
+Analizar completamente el sistema de notificaciones internas del proyecto SEC2.
+
+Las notificaciones permiten enviar mensajes dirigidos a usuarios específicos y registrar cuándo fueron leídas.
+
+---
+
+# Hoja origen
+
+Notificaciones
+
+---
+
+# Columnas detectadas
+
+El backend trabaja con:
+
+- IDNotificacion
+- IDUsuario
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+- Mensaje
+- EnviadoPor
+- FechaEnvio
+- Estado
+- FechaLectura
+- LeidoPor
+
+---
+
+# Identidad
+
+Cada notificación posee:
+
+IDNotificacion
+
+En Supabase:
+
+id
+
+será la clave primaria.
+
+Se conservará un folio visible únicamente si resulta útil para soporte o auditoría.
+
+---
+
+# Destinatario
+
+La relación principal es:
+
+IDUsuario
+
+↓
+
+Usuarios.IDAcceso
+
+En Supabase deberá convertirse en:
+
+usuario_id
+
+↓
+
+usuarios.id
+
+---
+
+# Remitente
+
+Actualmente:
+
+EnviadoPor
+
+usa el ID del usuario que envía.
+
+En Supabase:
+
+enviado_por_id
+
+↓
+
+usuarios.id
+
+---
+
+# Estado
+
+Estados detectados:
+
+- No leída
+- Leída
+
+La transición ocurre únicamente cuando el destinatario abre el detalle.
+
+---
+
+# Lectura
+
+Al abrir una notificación:
+
+el backend registra:
+
+- Estado = Leída
+- FechaLectura
+- LeidoPor
+
+Esto garantiza trazabilidad.
+
+---
+
+# Visibilidad
+
+Cada usuario únicamente consulta:
+
+sus propias notificaciones.
+
+Dirección puede consultar además las enviadas.
+
+---
+
+# Flujo detectado
+
+Dirección
+
+↓
+
+Crear mensaje
+
+↓
+
+Seleccionar destinatario
+
+↓
+
+Guardar
+
+↓
+
+Usuario consulta bandeja
+
+↓
+
+Abre detalle
+
+↓
+
+Estado cambia a Leída
+
+↓
+
+Se registra FechaLectura
+
+↓
+
+Se registra LeidoPor
+
+---
+
+# Reglas detectadas
+
+Solo Dirección puede crear notificaciones.
+
+Cada usuario únicamente puede leer las propias.
+
+No debe ser posible consultar mensajes ajenos modificando parámetros.
+
+---
+
+# Diseño recomendado
+
+Tabla:
+
+notificaciones
+
+Campos:
+
+- id
+- usuario_id
+- enviado_por_id
+- mensaje
+- estado_id
+- fecha_envio
+- fecha_lectura
+- leido_por_id
+- created_at
+- updated_at
+
+---
+
+# Información duplicada
+
+En Google Sheets también se almacenaban:
+
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+
+En PostgreSQL no será necesario duplicarlos.
+
+Se obtendrán mediante relaciones.
+
+---
+
+# Seguridad
+
+Supabase deberá impedir que un usuario consulte notificaciones ajenas mediante políticas RLS.
+
+La protección no dependerá únicamente del frontend.
+
+---
+
+# Escalabilidad
+
+La estructura permitirá posteriormente:
+
+- notificaciones grupales
+- notificaciones por rol
+- notificaciones por turno
+- avisos automáticos
+- recordatorios programados
+
+sin modificar la tabla principal.
+
+---
+
+# Decisiones aprobadas
+
+✓ Una notificación pertenece a un destinatario.
+
+✓ Tiene un remitente.
+
+✓ Registra lectura.
+
+✓ Registra quién la leyó.
+
+✓ El historial permanece.
+
+✓ La seguridad será responsabilidad de Supabase.
+
+---
+
+# Conclusión
+
+El sistema de notificaciones del proyecto actual posee una arquitectura suficientemente clara para migrarse sin cambios funcionales.
+
+La principal mejora será sustituir los identificadores manuales por relaciones reales entre tablas.
