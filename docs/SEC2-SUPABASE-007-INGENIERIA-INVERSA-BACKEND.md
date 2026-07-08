@@ -1759,3 +1759,331 @@ Los permisos oficiales deben separarse.
 La eliminación debe convertirse en auditoría formal.
 
 Los reportes deben calcularse mediante consultas, no almacenarse.
+---
+
+# AUDITORÍA 05 — Permisos Oficiales
+
+## Objetivo del módulo
+
+Analizar la lógica especial de los permisos oficiales.
+
+Este módulo es crítico porque no funciona como una incidencia normal.
+
+Un permiso oficial tiene:
+
+- una incidencia principal
+- hasta tres fechas oficiales
+- hasta tres fechas de uso posterior
+- estados de uso
+- reglas de edición restringidas
+
+---
+
+# Tipo especial
+
+El backend identifica permiso oficial mediante la función:
+
+esPermisoOficial()
+
+La lógica actual considera como permiso oficial:
+
+- Permiso oficial
+- Permiso personal
+
+Esto último se conserva por compatibilidad histórica.
+
+---
+
+# Columnas heredadas de Google Sheets
+
+En la hoja Incidencias se agregaron columnas especiales para este caso:
+
+- FechaOficial1
+- FechaOficial2
+- FechaOficial3
+- Uso1Fecha
+- Uso1Estado
+- Uso2Fecha
+- Uso2Estado
+- Uso3Fecha
+- Uso3Estado
+
+Estas columnas no existían originalmente en la estructura básica y el código las aseguraba automáticamente.
+
+---
+
+# Creación de permiso oficial
+
+Durante `guardarIncidencia()`, si el tipo es permiso oficial, el flujo cambia.
+
+Reglas detectadas:
+
+1. FechaOficial1 es obligatoria.
+2. FechaOficial2 es opcional.
+3. FechaOficial3 es opcional.
+4. FechaInicio se calcula automáticamente.
+5. FechaFin se calcula automáticamente.
+6. Las fechas de uso pueden capturarse desde el inicio o quedar pendientes.
+
+---
+
+# Cálculo de fecha inicio
+
+Para permisos oficiales:
+
+FechaInicio = menor fecha oficial registrada
+
+Ejemplo:
+
+- FechaOficial1 = 2026-09-10
+- FechaOficial2 = 2026-09-03
+- FechaOficial3 = 2026-09-20
+
+Entonces:
+
+FechaInicio = 2026-09-03
+
+---
+
+# Cálculo de fecha fin
+
+Para permisos oficiales:
+
+FechaFin = mayor fecha oficial registrada
+
+Ejemplo:
+
+- FechaOficial1 = 2026-09-10
+- FechaOficial2 = 2026-09-03
+- FechaOficial3 = 2026-09-20
+
+Entonces:
+
+FechaFin = 2026-09-20
+
+---
+
+# Estados iniciales de uso
+
+Durante la creación:
+
+Si existe UsoNFecha:
+
+UsoNEstado = Utilizada
+
+Si no existe UsoNFecha:
+
+UsoNEstado = Pendiente
+
+Esto ocurre para los tres posibles usos.
+
+---
+
+# Edición de usos
+
+La función principal es:
+
+guardarUsosPermisoOficial()
+
+Regla principal:
+
+Solo Dirección puede editar usos de permisos oficiales.
+
+---
+
+# Validaciones al editar usos
+
+Antes de editar, el sistema valida:
+
+1. Que exista la incidencia.
+2. Que la incidencia sea permiso oficial.
+3. Que el usuario tenga rol Dirección.
+
+Si no se cumplen estas condiciones, se rechaza la operación.
+
+---
+
+# Regla de inmutabilidad
+
+Esta es una de las reglas más importantes del sistema.
+
+Si un uso ya estaba marcado como:
+
+Utilizada
+
+y además tenía fecha registrada,
+
+el sistema NO permite:
+
+- borrarlo
+- modificarlo
+- reemplazarlo
+
+Simplemente lo conserva.
+
+---
+
+# Regla de actualización
+
+Si el uso está pendiente y llega una fecha nueva:
+
+- se guarda la fecha
+- el estado cambia a Utilizada
+
+Si no llega fecha y no existía fecha anterior:
+
+- se conserva vacío
+- el estado queda Pendiente
+
+---
+
+# Diseño recomendado en Supabase
+
+Los permisos oficiales no deben guardarse como nueve columnas dentro de `incidencias`.
+
+En lugar de:
+
+- fecha_oficial_1
+- fecha_oficial_2
+- fecha_oficial_3
+- uso_1_fecha
+- uso_1_estado
+- uso_2_fecha
+- uso_2_estado
+- uso_3_fecha
+- uso_3_estado
+
+Se recomienda usar una tabla relacionada:
+
+permiso_oficial_fechas
+
+---
+
+# Tabla recomendada: permiso_oficial_fechas
+
+Campos conceptuales:
+
+- id
+- incidencia_id
+- numero
+- fecha_oficial
+- fecha_uso
+- estado_uso_id
+- created_at
+- updated_at
+
+---
+
+# Relación
+
+Una incidencia de tipo permiso oficial puede tener varias fechas oficiales.
+
+Relación:
+
+incidencias  
+↓  
+permiso_oficial_fechas
+
+---
+
+# Límite inicial
+
+Aunque la tabla permitiría crecer, el sistema conservará el límite funcional inicial:
+
+máximo 3 fechas oficiales
+
+Esto mantiene compatibilidad con la lógica actual.
+
+En futuras versiones, si se decide permitir más fechas, no será necesario cambiar la estructura de la tabla.
+
+---
+
+# Ventaja del diseño relacional
+
+En Google Sheets cada fecha era una columna.
+
+En PostgreSQL cada fecha será una fila.
+
+Esto permite:
+
+- estructura más limpia
+- menos columnas vacías
+- posibilidad de crecer
+- validaciones más claras
+- auditoría más precisa
+
+---
+
+# Reglas que debe proteger Supabase
+
+No deben depender solo del frontend:
+
+- solo Dirección puede registrar usos
+- solo se editan permisos oficiales
+- una fecha de uso utilizada no puede modificarse
+- una fecha de uso utilizada no puede borrarse
+- un permiso oficial requiere al menos una fecha oficial
+- máximo inicial de tres fechas oficiales
+- fecha_inicio y fecha_fin deben derivarse de fechas oficiales
+
+---
+
+# Decisión de arquitectura
+
+El permiso oficial será una especialización de incidencia.
+
+No será una tabla independiente principal.
+
+La tabla principal seguirá siendo:
+
+incidencias
+
+Y sus fechas especiales vivirán en:
+
+permiso_oficial_fechas
+
+---
+
+# Pregunta de diseño pendiente
+
+Debe definirse si `fecha_inicio` y `fecha_fin` de la tabla `incidencias` se almacenarán como valores calculados al crear el permiso oficial o se calcularán dinámicamente desde `permiso_oficial_fechas`.
+
+Recomendación preliminar:
+
+Guardar `fecha_inicio` y `fecha_fin` en `incidencias` para facilitar reportes y consultas por rango.
+
+Pero deberán mantenerse sincronizadas con las fechas oficiales.
+
+---
+
+# Riesgo de migración
+
+El mayor riesgo es perder la protección contra modificación de usos ya utilizados.
+
+Esta regla deberá implementarse en Supabase con una función controlada o trigger.
+
+No basta con desactivar campos en la interfaz.
+
+---
+
+# Conclusión
+
+Los permisos oficiales son una de las piezas más importantes del sistema.
+
+La lógica anterior estaba correctamente protegida en Apps Script.
+
+En Supabase debe migrarse como una estructura relacional:
+
+incidencias
+
++
+
+permiso_oficial_fechas
+
++
+
+estados_uso_permiso
+
+La regla más importante a conservar es:
+
+un uso utilizado no se modifica ni se borra.
