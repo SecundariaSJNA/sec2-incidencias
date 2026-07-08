@@ -310,3 +310,243 @@ Documentar cualquier comportamiento cuya migración requiera especial atención.
 Este documento servirá como referencia oficial para diseñar la nueva arquitectura en Supabase.
 
 Ninguna decisión importante de la base de datos deberá tomarse sin revisar previamente este análisis.
+---
+
+# AUDITORÍA 01 — Arquitectura General del Backend
+
+## Estado general
+
+La versión analizada de `gsfinscript` corresponde a un backend maduro.
+
+No se trata de un prototipo.
+
+Contiene una arquitectura organizada por módulos, separación de responsabilidades y utilidades reutilizables.
+
+Esto confirma que la migración debe conservar la lógica funcional, pero no necesariamente la implementación.
+
+---
+
+# Arquitectura detectada
+
+El backend se encuentra organizado aproximadamente en los siguientes bloques:
+
+1. Configuración
+2. Utilidades generales
+3. Lectura de tablas
+4. Normalización
+5. Manejo de fechas
+6. Usuarios
+7. Sesión y autenticación
+8. Incidencias
+9. Permisos oficiales
+10. Notificaciones
+11. Reportes
+12. Papelera
+13. Seguridad
+14. API (GET / POST)
+
+La separación es suficientemente clara para migrar cada módulo de manera independiente.
+
+---
+
+# Patrón de acceso a datos
+
+El sistema utiliza un patrón consistente:
+
+Google Sheets
+
+↓
+
+leerTabla()
+
+↓
+
+Objetos JavaScript
+
+↓
+
+Funciones del sistema
+
+↓
+
+Respuesta JSON
+
+En Supabase este flujo cambiará a:
+
+PostgreSQL
+
+↓
+
+Consulta SQL
+
+↓
+
+Objetos JavaScript
+
+↓
+
+Respuesta JSON
+
+La lógica superior podrá mantenerse prácticamente igual.
+
+---
+
+# Sistema de lectura
+
+Se detectó una función central llamada:
+
+leerTabla()
+
+Responsabilidades:
+
+- leer cualquier hoja
+- convertir filas en objetos
+- asociar encabezados
+- eliminar filas vacías
+- utilizar caché
+
+Esta función constituye el equivalente al futuro repositorio de datos en Supabase.
+
+---
+
+# Sistema de escritura
+
+El backend utiliza funciones genéricas como:
+
+- actualizarCamposPorEncabezado()
+- appendRowPorEncabezado()
+
+Estas funciones permiten escribir utilizando nombres de columnas en lugar de índices numéricos.
+
+Esta decisión fue correcta y facilita la migración.
+
+En PostgreSQL ese comportamiento será reemplazado por consultas SQL.
+
+---
+
+# Sistema de normalización
+
+Existe un módulo completo dedicado a normalizar datos.
+
+Se identificaron funciones para:
+
+- texto
+- correo
+- fechas
+- fecha y hora
+- roles
+
+La normalización evita inconsistencias antes de almacenar información.
+
+Este comportamiento deberá mantenerse durante la migración.
+
+---
+
+# Manejo de fechas
+
+Se detectaron funciones específicas para:
+
+- fecha actual
+- fecha y hora actual
+- sumar días
+- obtener fecha mínima
+- obtener fecha máxima
+
+Estas funciones son especialmente importantes para:
+
+- permisos oficiales
+- reportes
+- incidencias
+
+En PostgreSQL parte de estas operaciones podrán ejecutarse directamente mediante SQL.
+
+---
+
+# Caché
+
+El backend utiliza CacheService de Google Apps Script.
+
+Objetivo:
+
+- reducir lecturas repetidas de Google Sheets
+- mejorar velocidad
+
+En Supabase este mecanismo cambiará.
+
+No existirá CacheService.
+
+La optimización vendrá principalmente de:
+
+- índices
+- consultas SQL
+- PostgreSQL
+
+---
+
+# API detectada
+
+El backend expone acciones mediante POST.
+
+Acciones identificadas hasta este momento:
+
+- iniciarSesion
+- guardarIncidencia
+- guardarUsosPermisoOficial
+- eliminarIncidencia
+- guardarNotificacion
+
+Cada acción:
+
+- valida datos
+- obtiene contexto
+- ejecuta lógica
+- limpia caché
+- responde JSON
+
+Este patrón será reutilizado durante la migración.
+
+---
+
+# Primera conclusión
+
+La arquitectura general del backend es suficientemente modular para migrarse a Supabase por componentes.
+
+No será necesario reescribir toda la lógica desde cero.
+
+La estrategia correcta será:
+
+módulo por módulo
+
+↓
+
+función por función
+
+↓
+
+tabla por tabla
+
+↓
+
+pruebas unitarias
+
+antes de continuar con el siguiente módulo.
+
+---
+
+# Decisiones preliminares
+
+Se aprueban provisionalmente las siguientes decisiones:
+
+✓ mantener separación por módulos
+
+✓ mantener funciones utilitarias
+
+✓ mantener normalización
+
+✓ eliminar dependencia de Google Sheets
+
+✓ eliminar CacheService
+
+✓ sustituir acceso por consultas PostgreSQL
+
+✓ conservar la estructura lógica del backend
