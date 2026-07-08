@@ -1,0 +1,3 @@
+-- SEC2-Incidencias
+-- SQL inicial de Supabase
+-- Etapa 2: Construcción de base PostgreSQL
