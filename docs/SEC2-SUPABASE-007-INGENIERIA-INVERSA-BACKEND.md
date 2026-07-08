@@ -1143,3 +1143,619 @@ Usuarios.Activo
 ↓
 
 usuarios.activo
+---
+
+# AUDITORÍA 04 — Incidencias
+
+## Objetivo del módulo
+
+Analizar la lógica principal de incidencias del backend anterior para migrarla correctamente a Supabase.
+
+Este módulo es el núcleo funcional del sistema SEC2-Incidencias.
+
+---
+
+# Hoja origen
+
+El módulo trabaja principalmente con la hoja:
+
+Incidencias
+
+También se relaciona con:
+
+- Usuarios
+- Papelera
+
+---
+
+# Columnas detectadas en Incidencias
+
+El backend transforma cada fila de la hoja Incidencias en un objeto con estos campos:
+
+- IDIncidencia
+- IDUsuario
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+- TipoIncidencia
+- FechaInicio
+- FechaFin
+- LicenciaMedica
+- Observaciones
+- RegistradoPor
+- FechaRegistro
+- Estado
+- FechaOficial1
+- FechaOficial2
+- FechaOficial3
+- Uso1Fecha
+- Uso1Estado
+- Uso2Fecha
+- Uso2Estado
+- Uso3Fecha
+- Uso3Estado
+
+---
+
+# Identidad de la incidencia
+
+La identidad visible anterior era:
+
+IDIncidencia
+
+Ejemplos esperados:
+
+- I001
+- I002
+- I003
+
+En Supabase deberá existir:
+
+- `id`: identidad interna real
+- `folio`: identidad visible equivalente a IDIncidencia
+
+---
+
+# Identidad del usuario afectado
+
+La incidencia se vincula al usuario mediante:
+
+IDUsuario
+
+Ese campo corresponde a:
+
+Usuarios.IDAcceso
+
+En Supabase esta relación deberá convertirse en:
+
+incidencias.usuario_id
+
+relacionado con:
+
+usuarios.id
+
+---
+
+# Datos duplicados del usuario
+
+En Google Sheets la incidencia guardaba también:
+
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+
+Esto era necesario porque Sheets no tenía relaciones reales.
+
+En PostgreSQL no se recomienda duplicar esos datos en la incidencia.
+
+La incidencia debe apuntar al usuario, y los datos visibles se obtienen mediante relación.
+
+---
+
+# Excepción histórica pendiente
+
+Antes de eliminar totalmente los datos duplicados, debe decidirse si se necesita conservar una “fotografía histórica” del usuario al momento del registro.
+
+Ejemplo:
+
+Si un docente cambia de turno después de una incidencia antigua, puede ser útil saber qué turno tenía cuando se registró.
+
+Esta decisión queda pendiente para el diseño físico.
+
+---
+
+# Estado de la incidencia
+
+El sistema no elimina físicamente una incidencia al principio.
+
+Usa el campo:
+
+Estado
+
+Valores detectados como no activos:
+
+- Eliminada
+- Eliminado
+- Cancelada
+- Cancelado
+
+Todo lo demás se considera activo.
+
+En Supabase esta lógica deberá normalizarse mediante:
+
+estados_incidencia
+
+---
+
+# Incidencia activa
+
+Una incidencia activa es toda incidencia cuyo estado no representa eliminación o cancelación.
+
+Esta regla es fundamental para:
+
+- reportes
+- historial
+- consultas por fecha
+- conteos de ausentes
+
+---
+
+# Filtros por fecha
+
+El backend usa dos reglas principales:
+
+## Incidencia en fecha
+
+Una incidencia está vigente en una fecha si:
+
+FechaInicio <= fecha_consulta
+
+y
+
+FechaFin >= fecha_consulta
+
+## Incidencia cruza rango
+
+Una incidencia cruza un rango si:
+
+FechaInicio <= fecha_fin_consulta
+
+y
+
+FechaFin >= fecha_inicio_consulta
+
+Estas reglas deberán trasladarse a consultas SQL.
+
+---
+
+# Tipos de incidencia
+
+El sistema reconoce varios tipos:
+
+- Permiso oficial
+- Incapacidad
+- Humanitario sindical
+- Humanitario oficial
+- Comisión sindical
+- Comisión oficial
+- Especial
+
+Además, por compatibilidad histórica trata:
+
+Permiso personal
+
+como permiso oficial.
+
+---
+
+# Incidencia médica
+
+El sistema considera médica una incidencia si el tipo contiene:
+
+- incapacidad
+- médica
+- médico
+
+Si la incidencia es médica, conserva el campo:
+
+LicenciaMedica
+
+Si no es médica, ese campo queda vacío.
+
+---
+
+# Creación de incidencia
+
+La función principal de creación es:
+
+guardarIncidencia()
+
+Regla principal:
+
+Solo Dirección puede otorgar incidencias.
+
+---
+
+# Flujo de creación detectado
+
+1. Validar que el usuario tenga rol Dirección.
+2. Buscar usuario afectado por IDAcceso.
+3. Validar existencia del usuario afectado.
+4. Validar tipo de incidencia.
+5. Normalizar fechas.
+6. Detectar si es permiso oficial.
+7. Detectar si es incidencia médica.
+8. Validar fechas.
+9. Generar nuevo ID de incidencia.
+10. Construir objeto de incidencia.
+11. Guardar registro.
+12. Devolver la incidencia creada.
+
+---
+
+# Validaciones de creación
+
+## Usuario afectado
+
+Debe existir.
+
+Si no existe, el sistema rechaza la operación.
+
+## Tipo de incidencia
+
+Debe existir.
+
+Si no se selecciona tipo, el sistema rechaza la operación.
+
+## Fechas normales
+
+Para incidencias que no son permiso oficial:
+
+- FechaInicio es obligatoria.
+- FechaFin es obligatoria.
+- FechaFin no puede ser anterior a FechaInicio.
+
+## Permiso oficial
+
+Para permiso oficial:
+
+- FechaOficial1 es obligatoria.
+- FechaInicio se calcula automáticamente.
+- FechaFin se calcula automáticamente.
+
+---
+
+# Fecha de registro
+
+La incidencia guarda:
+
+FechaRegistro
+
+En el sistema anterior se guarda como fecha actual en formato día.
+
+En Supabase se recomienda guardar:
+
+- fecha_registro como timestamp
+- created_at como timestamp técnico
+
+---
+
+# Registrado por
+
+El sistema anterior guarda:
+
+RegistradoPor = usuarioRegistro.ID
+
+Esto usa la columna ID de Usuarios, no IDAcceso.
+
+En Supabase se recomienda sustituir esto por:
+
+registrado_por_id
+
+relacionado con:
+
+usuarios.id
+
+---
+
+# Generación de folio
+
+El backend genera el folio buscando el número máximo existente en IDIncidencia y sumando 1.
+
+Ejemplo:
+
+I001
+
+I002
+
+I003
+
+En Supabase hay dos opciones:
+
+## Opción A
+
+Mantener folio tipo I001.
+
+## Opción B
+
+Usar id interno y generar folio visual aparte.
+
+Recomendación:
+
+Mantener `folio` tipo I001 para continuidad visual, pero no usarlo como clave primaria.
+
+---
+
+# Eliminación de incidencia
+
+La función principal es:
+
+eliminarIncidencia()
+
+Regla:
+
+Solo Dirección puede eliminar incidencias.
+
+---
+
+# Flujo de eliminación detectado
+
+1. Validar rol Dirección.
+2. Validar que exista ID de incidencia.
+3. Buscar incidencia.
+4. Copiar incidencia a Papelera.
+5. Marcar incidencia original como Eliminada.
+6. Devolver confirmación.
+
+---
+
+# Papelera
+
+El sistema anterior no elimina directamente la información.
+
+Antes de marcar la incidencia como eliminada, copia sus datos a la hoja Papelera.
+
+La Papelera conserva:
+
+- datos de la incidencia
+- datos del permiso oficial
+- eliminado por
+- fecha de eliminación
+
+En Supabase esta lógica debe migrarse como auditoría formal.
+
+---
+
+# Diseño recomendado para eliminación en Supabase
+
+No borrar físicamente incidencias en operación normal.
+
+Usar:
+
+estado_id = eliminada
+
+Y además registrar evento en:
+
+auditoria_eventos
+
+Esto reemplaza y mejora la hoja Papelera.
+
+---
+
+# Visibilidad de incidencias
+
+El backend valida visibilidad mediante rol y turno.
+
+## Dirección
+
+Puede ver todas las incidencias.
+
+## Docente
+
+Solo puede ver incidencias donde:
+
+IDUsuario = IDAcceso del usuario en sesión
+
+## Correspondencia y Prefectura
+
+Pueden ver incidencias según turno.
+
+Reglas:
+
+- si turno de sesión es A, puede ver todo
+- si turno de incidencia es A, puede verlo
+- si turno de sesión coincide con turno de incidencia, puede verlo
+
+---
+
+# Detalle de incidencia
+
+La función de detalle:
+
+- busca incidencia por IDIncidencia
+- valida visibilidad
+- devuelve la incidencia
+- indica si puede editar
+- indica si puede eliminar
+
+Reglas detectadas:
+
+- solo Dirección puede eliminar
+- solo Dirección puede editar permisos oficiales
+- solo se editan permisos oficiales, no cualquier incidencia
+
+---
+
+# Ordenamiento
+
+Las incidencias se ordenan por FechaInicio descendente.
+
+Esto se usa en:
+
+- historiales
+- reportes
+- listas
+- detalles
+
+En Supabase se implementará con:
+
+ORDER BY fecha_inicio DESC
+
+---
+
+# Conteo de ausentes
+
+El sistema cuenta ausentes por IDUsuario único.
+
+Si una persona tiene varias incidencias activas en el mismo rango, cuenta una sola vez.
+
+Esta regla debe conservarse en reportes.
+
+---
+
+# Diseño recomendado en Supabase
+
+## Tabla principal
+
+incidencias
+
+Campos conceptuales:
+
+- id
+- folio
+- usuario_id
+- tipo_incidencia_id
+- fecha_inicio
+- fecha_fin
+- licencia_medica
+- observaciones
+- registrado_por_id
+- fecha_registro
+- estado_id
+- created_at
+- updated_at
+
+---
+
+# Campos que NO deberían duplicarse inicialmente
+
+No duplicar en incidencias:
+
+- nombre
+- apellidos
+- correo
+- rol
+- turno
+
+Estos datos viven en usuarios y catálogos relacionados.
+
+---
+
+# Campos que se separan a otra tabla
+
+Los campos de permiso oficial no deberían vivir directamente en incidencias:
+
+- FechaOficial1
+- FechaOficial2
+- FechaOficial3
+- Uso1Fecha
+- Uso1Estado
+- Uso2Fecha
+- Uso2Estado
+- Uso3Fecha
+- Uso3Estado
+
+Deben ir a:
+
+permiso_oficial_fechas
+
+---
+
+# Reglas que debe proteger Supabase
+
+No deben depender únicamente del frontend:
+
+- solo Dirección puede crear incidencias
+- solo Dirección puede eliminar incidencias
+- solo Dirección puede editar usos de permisos oficiales
+- Docente solo ve lo suyo
+- Prefectura/Correspondencia solo ven lo permitido por turno
+- las incidencias eliminadas no deben aparecer como activas
+- la fecha final no puede ser anterior a la inicial
+- los reportes no deben contar dos veces a una misma persona
+
+---
+
+# Decisiones aprobadas
+
+✓ reportes no se almacenan; se calculan.
+
+✓ incidencias no se borran físicamente.
+
+✓ `folio` conserva continuidad visual de IDIncidencia.
+
+✓ `id` será la clave primaria real.
+
+✓ `usuario_id` reemplaza IDUsuario.
+
+✓ `registrado_por_id` reemplaza RegistradoPor.
+
+✓ permisos oficiales se separan en tabla propia.
+
+✓ información derivada del usuario no se duplica inicialmente.
+
+---
+
+# Riesgos de migración
+
+## Riesgo 1
+
+Perder compatibilidad visual con folios I001, I002.
+
+Mitigación:
+
+Crear campo `folio`.
+
+## Riesgo 2
+
+Perder lógica de turno al eliminar duplicación de Turno en incidencias.
+
+Mitigación:
+
+Decidir si el turno se consulta desde usuarios actual o si se guarda snapshot histórico.
+
+## Riesgo 3
+
+Permisos oficiales mal modelados.
+
+Mitigación:
+
+Separarlos en tabla especializada.
+
+## Riesgo 4
+
+Papelera incompleta.
+
+Mitigación:
+
+Crear auditoría formal y no depender de copia manual de filas.
+
+---
+
+# Conclusión
+
+El módulo de incidencias está suficientemente claro para diseñar una estructura relacional profesional.
+
+La tabla `incidencias` debe representar únicamente la incidencia principal.
+
+Los datos de usuario deben obtenerse por relación.
+
+Los permisos oficiales deben separarse.
+
+La eliminación debe convertirse en auditoría formal.
+
+Los reportes deben calcularse mediante consultas, no almacenarse.
