@@ -2342,3 +2342,159 @@ sin modificar la tabla principal.
 El sistema de notificaciones del proyecto actual posee una arquitectura suficientemente clara para migrarse sin cambios funcionales.
 
 La principal mejora será sustituir los identificadores manuales por relaciones reales entre tablas.
+---
+
+# CIERRE DE INGENIERÍA INVERSA — Backend Apps Script
+
+## Decisión
+
+La ingeniería inversa queda cerrada en esta fase.
+
+Ya se identificaron los módulos esenciales:
+
+- autenticación
+- usuarios
+- roles
+- turnos
+- incidencias
+- permisos oficiales
+- notificaciones
+- reportes
+- papelera / auditoría
+- utilidades generales
+
+---
+
+# Reportes
+
+Los reportes no se almacenarán como tablas.
+
+Se calcularán en tiempo real desde:
+
+- usuarios
+- incidencias
+- roles
+- turnos
+- estados
+
+Reportes principales:
+
+- reporte del día
+- reporte semanal
+- consulta por fechas
+- historial por persona
+- resumen mensual
+
+---
+
+# Auditoría
+
+La antigua hoja Papelera será reemplazada por una tabla formal:
+
+auditoria_eventos
+
+Debe registrar:
+
+- usuario que ejecuta
+- acción realizada
+- tabla afectada
+- registro afectado
+- datos anteriores
+- datos nuevos
+- fecha y hora
+
+---
+
+# Decisiones finales de migración
+
+## Autenticación
+
+Se mantiene el concepto original:
+
+- id_acceso
+- contraseña interna
+
+No se usará correo como login inicial.
+
+El correo queda como dato informativo/futuro.
+
+La contraseña se guardará como hash.
+
+---
+
+## Usuarios
+
+La tabla usuarios será relacional.
+
+Dependerá de:
+
+- roles
+- turnos
+
+---
+
+## Incidencias
+
+La tabla incidencias guardará solo la incidencia principal.
+
+No duplicará nombre, apellidos, correo, rol ni turno salvo que después se decida conservar snapshot histórico.
+
+---
+
+## Permisos oficiales
+
+Los permisos oficiales se separarán en:
+
+permiso_oficial_fechas
+
+Cada fecha oficial será una fila relacionada con la incidencia.
+
+---
+
+## Notificaciones
+
+Las notificaciones no duplicarán datos del usuario.
+
+Usarán relaciones:
+
+- usuario_id
+- enviado_por_id
+- leido_por_id
+
+---
+
+## Eliminación
+
+No se borrarán incidencias físicamente.
+
+Se marcarán como eliminadas y se registrará auditoría.
+
+---
+
+# Próximo paso
+
+Pasar al diseño físico de Supabase.
+
+Orden de implementación:
+
+1. SQL de catálogos
+2. SQL de usuarios
+3. SQL de incidencias
+4. SQL de permiso_oficial_fechas
+5. SQL de notificaciones
+6. SQL de auditoría
+7. SQL de sistema_estado
+8. datos iniciales
+9. funciones de autenticación
+10. políticas RLS
+11. conexión desde api.js
+
+---
+
+# Conclusión
+
+El backend anterior queda suficientemente entendido para migrar a Supabase.
+
+La siguiente fase ya no será análisis.
+
+La siguiente fase será construcción controlada de la base PostgreSQL.
