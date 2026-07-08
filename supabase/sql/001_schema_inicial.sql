@@ -25,6 +25,24 @@ begin
 end;
 $$;
 
+create or replace function actualizar_nombre_completo_usuario()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.nombre_completo = trim(
+    concat_ws(
+      ' ',
+      new.nombre,
+      nullif(new.apellido_paterno, ''),
+      nullif(new.apellido_materno, '')
+    )
+  );
+
+  return new;
+end;
+$$;
+
 -- ============================================================
 -- 03. CATÁLOGOS
 -- ============================================================
@@ -115,17 +133,7 @@ create table if not exists usuarios (
   apellido_paterno text,
   apellido_materno text,
   apellidos_originales text,
-
-  nombre_completo text generated always as (
-    trim(
-      concat_ws(
-        ' ',
-        nombre,
-        nullif(apellido_paterno, ''),
-        nullif(apellido_materno, '')
-      )
-    )
-  ) stored,
+  nombre_completo text,
 
   correo citext,
 
@@ -310,46 +318,62 @@ create table if not exists configuracion (
 -- 10. TRIGGERS UPDATED_AT
 -- ============================================================
 
+drop trigger if exists trg_roles_updated_at on roles;
 create trigger trg_roles_updated_at
 before update on roles
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_turnos_updated_at on turnos;
 create trigger trg_turnos_updated_at
 before update on turnos
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_tipos_incidencia_updated_at on tipos_incidencia;
 create trigger trg_tipos_incidencia_updated_at
 before update on tipos_incidencia
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_estados_incidencia_updated_at on estados_incidencia;
 create trigger trg_estados_incidencia_updated_at
 before update on estados_incidencia
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_estados_uso_permiso_updated_at on estados_uso_permiso;
 create trigger trg_estados_uso_permiso_updated_at
 before update on estados_uso_permiso
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_estados_notificacion_updated_at on estados_notificacion;
 create trigger trg_estados_notificacion_updated_at
 before update on estados_notificacion
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_usuarios_updated_at on usuarios;
 create trigger trg_usuarios_updated_at
 before update on usuarios
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_usuarios_nombre_completo on usuarios;
+create trigger trg_usuarios_nombre_completo
+before insert or update on usuarios
+for each row execute function actualizar_nombre_completo_usuario();
+
+drop trigger if exists trg_incidencias_updated_at on incidencias;
 create trigger trg_incidencias_updated_at
 before update on incidencias
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_permiso_oficial_fechas_updated_at on permiso_oficial_fechas;
 create trigger trg_permiso_oficial_fechas_updated_at
 before update on permiso_oficial_fechas
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_notificaciones_updated_at on notificaciones;
 create trigger trg_notificaciones_updated_at
 before update on notificaciones
 for each row execute function actualizar_updated_at();
 
+drop trigger if exists trg_configuracion_updated_at on configuracion;
 create trigger trg_configuracion_updated_at
 before update on configuracion
 for each row execute function actualizar_updated_at();
@@ -400,8 +424,8 @@ on conflict (clave) do nothing;
 
 insert into estados_notificacion (clave, nombre, descripcion, orden)
 values
-  ('no_leida', 'No leída', 'Notificación pendiente de lectura.'),
-  ('leida', 'Leída', 'Notificación ya abierta por el usuario.')
+  ('no_leida', 'No leída', 'Notificación pendiente de lectura.', 1),
+  ('leida', 'Leída', 'Notificación ya abierta por el usuario.', 2)
 on conflict (clave) do nothing;
 
 insert into sistema_estado (clave, valor, descripcion)
@@ -433,8 +457,7 @@ alter table auditoria_eventos enable row level security;
 alter table sistema_estado enable row level security;
 alter table configuracion enable row level security;
 
--- Las políticas RLS se definirán en un archivo posterior:
--- supabase/sql/002_politicas_rls.sql
+-- Las políticas RLS se definirán en archivo posterior.
 
 -- ============================================================
 -- 13. COMENTARIOS
