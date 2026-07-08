@@ -844,3 +844,302 @@ La autenticación será uno de los módulos con mayor cambio técnico.
 Aunque el comportamiento visible será el mismo para el usuario, internamente cambiará completamente la infraestructura.
 
 Esta migración deberá realizarse únicamente después de diseñar correctamente la tabla `usuarios` y las políticas RLS.
+---
+
+# AUDITORÍA 03 — Usuarios, Roles y Turnos
+
+## Objetivo del módulo
+
+Analizar cómo el backend actual administra usuarios, roles, turnos, visibilidad y selección de personal.
+
+Este módulo será la base para diseñar la tabla `usuarios` y sus relaciones con `roles` y `turnos`.
+
+---
+
+# Hoja origen
+
+El módulo trabaja principalmente con la hoja:
+
+Usuarios
+
+---
+
+# Columnas detectadas
+
+La función `obtenerUsuarios()` transforma cada fila de la hoja Usuarios en un objeto con los siguientes campos:
+
+- ID
+- Nombre
+- Apellidos
+- Correo
+- Rol
+- Turno
+- Activo
+- IDAcceso
+- Contrasena
+
+---
+
+# Identidad funcional
+
+El identificador funcional es:
+
+IDAcceso
+
+No es:
+
+ID
+
+La función `buscarUsuarioPorIDAcceso()` busca usuarios por `IDAcceso`.
+
+Esto confirma que en Supabase la columna equivalente será:
+
+id_acceso
+
+---
+
+# Columna ID
+
+La columna `ID` no funciona como identidad principal de acceso.
+
+Sin embargo, sí se usa como referencia de auditoría en otras partes del sistema, por ejemplo:
+
+- RegistradoPor
+- EnviadoPor
+- LeidoPor
+- EliminadoPor
+
+En Supabase se recomienda conservar esta información como:
+
+codigo_auditoria
+
+o reemplazarla por relaciones reales hacia `usuarios.id`.
+
+---
+
+# Nombre y apellidos
+
+El sistema conserva nombre y apellidos separados.
+
+Además, el ordenamiento se hace por:
+
+Apellidos + Nombre
+
+Esta lógica deberá conservarse para desplegables y listados.
+
+---
+
+# Correo
+
+El correo se normaliza a minúsculas.
+
+Actualmente no es obligatorio para iniciar sesión.
+
+Se conservará como campo informativo y para funciones futuras.
+
+Posibles usos futuros:
+
+- PDF
+- avisos
+- recuperación administrativa
+- exportaciones
+- reportes
+
+No formará parte del login inicial.
+
+---
+
+# Rol
+
+El rol se normaliza mediante `canonicalizarRol()`.
+
+Roles válidos:
+
+- Direccion
+- Prefectura
+- Docente
+- Correspondencia
+
+También acepta abreviaturas:
+
+- dir
+- pre
+- doc
+- cor
+
+En Supabase esta normalización deberá sustituirse por una tabla `roles`.
+
+---
+
+# Turno
+
+El turno se usa para restringir visibilidad.
+
+Valores actuales:
+
+- M
+- V
+- A
+
+La lógica actual interpreta `A` como visibilidad amplia.
+
+Si el usuario de sesión tiene turno `A`, puede ver información de ambos turnos.
+
+Si el usuario objetivo tiene turno `A`, también puede ser visible para otros contextos autorizados.
+
+---
+
+# Usuario activo
+
+La función `usuarioEstaActivo()` interpreta como inactivo cualquiera de estos valores:
+
+- no
+- false
+- falso
+- inactivo
+- baja
+- 0
+
+Si el campo está vacío, el usuario se considera activo.
+
+En Supabase esta lógica deberá simplificarse con:
+
+activo boolean default true
+
+---
+
+# Visibilidad por rol
+
+La función `usuarioVisiblePorTurno()` define reglas importantes:
+
+## Dirección
+
+Puede ver todos los usuarios.
+
+## Docente
+
+Solo puede verse a sí mismo.
+
+## Correspondencia y Prefectura
+
+Pueden ver usuarios según turno.
+
+Reglas:
+
+- si turno de sesión es A, puede ver todos
+- si turno del usuario objetivo es A, puede verlo
+- si ambos turnos coinciden, puede verlo
+
+---
+
+# Personal activo
+
+La función `obtenerPersonalActivo()` filtra únicamente usuarios activos y los ordena por apellidos/nombre.
+
+Esta lógica será necesaria para formularios y reportes.
+
+---
+
+# Usuarios para formulario
+
+La función `obtenerUsuariosParaFormulario()` devuelve distintos resultados según rol:
+
+## Dirección
+
+Recibe todo el personal activo.
+
+## Correspondencia
+
+Recibe personal visible según turno.
+
+## Prefectura
+
+Recibe personal visible según turno.
+
+## Docente
+
+Recibe solo su propio usuario.
+
+---
+
+# Conclusión técnica
+
+La tabla `usuarios` no debe diseñarse aislada.
+
+Debe depender de:
+
+- roles
+- turnos
+
+Y debe permitir:
+
+- identidad visible mediante `id_acceso`
+- control de activo/inactivo
+- ordenamiento por apellidos y nombre
+- visibilidad por turno
+- permisos diferenciados por rol
+
+---
+
+# Decisiones para Supabase
+
+Se aprueban preliminarmente:
+
+- conservar `id_acceso` como identidad visible
+- crear `usuarios.id` como identidad interna
+- crear `roles` como catálogo
+- crear `turnos` como catálogo
+- conservar correo como dato no obligatorio para login
+- reemplazar `Contrasena` por `password_hash`
+- usar `activo boolean`
+- conservar lógica de turno `A`
+
+---
+
+# Riesgos de migración
+
+La visibilidad por turno no debe quedar solo en frontend.
+
+Debe implementarse también en Supabase mediante funciones o políticas.
+
+Si esto se descuida, un usuario podría intentar consultar información de otro turno manipulando peticiones.
+
+---
+
+# Equivalencia recomendada
+
+Usuarios.ID
+
+↓
+
+usuarios.codigo_auditoria
+
+Usuarios.IDAcceso
+
+↓
+
+usuarios.id_acceso
+
+Usuarios.Contrasena
+
+↓
+
+usuarios.password_hash
+
+Usuarios.Rol
+
+↓
+
+usuarios.rol_id
+
+Usuarios.Turno
+
+↓
+
+usuarios.turno_id
+
+Usuarios.Activo
+
+↓
+
+usuarios.activo
