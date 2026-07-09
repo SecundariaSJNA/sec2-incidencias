@@ -4,12 +4,13 @@
 -- Funciones de autenticación interna
 -- ============================================================
 
--- Login elegido:
--- id_acceso + contraseña interna
+-- Login temporal de prueba:
+-- IDAcceso: DIR001
+-- Contraseña: DIR1234
 --
--- No se usa correo como login inicial.
--- No se usa Supabase Auth para docentes en esta versión.
--- La contraseña nunca se guarda en texto plano.
+-- Regla definitiva:
+-- La columna A / ID anterior NO será login.
+-- El login real será id_acceso + contraseña interna con hash.
 
 -- ============================================================
 -- 01. FUNCIÓN: hash_password_sec2
@@ -72,58 +73,125 @@ declare
 begin
   if p_id_acceso is null or trim(p_id_acceso) = '' then
     return query
-    select false, 'Escribe el ID de acceso.', null::uuid, null::text, null::text, null::text, null::text,
-           null::text, null::text, null::text, null::text, null::text, null::text, null::boolean;
+    select
+      false,
+      'Escribe el ID de acceso.',
+      null::uuid,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::boolean;
     return;
   end if;
 
   if p_password is null or trim(p_password) = '' then
     return query
-    select false, 'Escribe la contraseña.', null::uuid, null::text, null::text, null::text, null::text,
-           null::text, null::text, null::text, null::text, null::text, null::text, null::boolean;
+    select
+      false,
+      'Escribe la contraseña.',
+      null::uuid,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::boolean;
     return;
   end if;
 
-  select *
+  select u.*
   into v_usuario
-  from usuarios
-  where id_acceso = p_id_acceso
+  from public.usuarios as u
+  where u.id_acceso = trim(p_id_acceso)
   limit 1;
 
   if v_usuario.id is null then
     return query
-    select false, 'El ID de acceso no se encuentra registrado.', null::uuid, null::text, null::text, null::text, null::text,
-           null::text, null::text, null::text, null::text, null::text, null::text, null::boolean;
+    select
+      false,
+      'El ID de acceso no se encuentra registrado.',
+      null::uuid,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::boolean;
     return;
   end if;
 
   if v_usuario.activo is not true then
     return query
-    select false, 'El usuario no está activo.', null::uuid, null::text, null::text, null::text, null::text,
-           null::text, null::text, null::text, null::text, null::text, null::text, null::boolean;
+    select
+      false,
+      'El usuario no está activo.',
+      null::uuid,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::boolean;
     return;
   end if;
 
   if not verificar_password_sec2(p_password, v_usuario.password_hash) then
     return query
-    select false, 'La contraseña es incorrecta.', null::uuid, null::text, null::text, null::text, null::text,
-           null::text, null::text, null::text, null::text, null::text, null::text, null::boolean;
+    select
+      false,
+      'La contraseña es incorrecta.',
+      null::uuid,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::text,
+      null::boolean;
     return;
   end if;
 
-  select *
+  select r.*
   into v_rol
-  from roles
-  where id = v_usuario.rol_id;
+  from public.roles as r
+  where r.id = v_usuario.rol_id
+  limit 1;
 
-  select *
+  select t.*
   into v_turno
-  from turnos
-  where id = v_usuario.turno_id;
+  from public.turnos as t
+  where t.id = v_usuario.turno_id
+  limit 1;
 
-  update usuarios
+  update public.usuarios as u
   set ultimo_acceso_at = now()
-  where id = v_usuario.id;
+  where u.id = v_usuario.id;
 
   return query
   select
@@ -182,25 +250,29 @@ begin
     raise exception 'Falta contraseña.';
   end if;
 
-  select id into v_rol_id
-  from roles
-  where clave = p_rol_clave
-    and activo = true;
+  select r.id
+  into v_rol_id
+  from public.roles as r
+  where r.clave = p_rol_clave
+    and r.activo = true
+  limit 1;
 
   if v_rol_id is null then
     raise exception 'Rol no válido: %', p_rol_clave;
   end if;
 
-  select id into v_turno_id
-  from turnos
-  where clave = p_turno_clave
-    and activo = true;
+  select t.id
+  into v_turno_id
+  from public.turnos as t
+  where t.clave = p_turno_clave
+    and t.activo = true
+  limit 1;
 
   if v_turno_id is null then
     raise exception 'Turno no válido: %', p_turno_clave;
   end if;
 
-  insert into usuarios (
+  insert into public.usuarios (
     codigo_auditoria,
     id_acceso,
     nombre,
@@ -226,6 +298,19 @@ begin
     true,
     hash_password_sec2(p_password)
   )
+  on conflict (id_acceso) do update
+  set
+    codigo_auditoria = excluded.codigo_auditoria,
+    nombre = excluded.nombre,
+    apellido_paterno = excluded.apellido_paterno,
+    apellido_materno = excluded.apellido_materno,
+    apellidos_originales = excluded.apellidos_originales,
+    correo = excluded.correo,
+    rol_id = excluded.rol_id,
+    turno_id = excluded.turno_id,
+    activo = true,
+    password_hash = excluded.password_hash,
+    updated_at = now()
   returning id into v_usuario_id;
 
   return v_usuario_id;
@@ -233,7 +318,7 @@ end;
 $$;
 
 -- ============================================================
--- 05. USUARIO DE PRUEBA INICIAL
+-- 05. USUARIO TEMPORAL DE PRUEBA
 -- ============================================================
 
 select crear_usuario_sec2(
@@ -247,9 +332,6 @@ select crear_usuario_sec2(
   'direccion',
   'A',
   'DIR1234'
-)
-where not exists (
-  select 1 from usuarios where id_acceso = 'DIR001'
 );
 
 -- ============================================================
