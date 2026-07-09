@@ -355,24 +355,67 @@ function estadoNotificacionMeta(estado) {
 
 function esNotificacionLeida(est) { return estadoNotificacionMeta(est); }
 
-function openModule(moduleName) {
-  const rol = (sessionStorage.getItem("userRol") || "").toLowerCase();
+function mostrarAvisoRolModulo(moduloSolicitado) {
+  const rolUsuario = sessionStorage.getItem("userRol") || "Sin rol";
+  const mensaje = "Tu rol es " + rolUsuario + ". No puedes entrar al módulo " + moduloSolicitado + ".";
 
-  // Validación estricta usando nombres limpios de módulo
-  if (moduleName === "Direccion" && !esRolDireccion(rol)) {
-    alert("Su rol es " + rol + ". No tiene acceso a este módulo.");
-    return;
+  let aviso = document.getElementById("sec2RoleToast");
+
+  if (!aviso) {
+    aviso = document.createElement("div");
+    aviso.id = "sec2RoleToast";
+    aviso.style.position = "fixed";
+    aviso.style.left = "50%";
+    aviso.style.bottom = "28px";
+    aviso.style.transform = "translateX(-50%) translateY(18px)";
+    aviso.style.zIndex = "99999";
+    aviso.style.maxWidth = "min(86vw, 380px)";
+    aviso.style.padding = "13px 18px";
+    aviso.style.borderRadius = "18px";
+    aviso.style.background = "rgba(17, 24, 39, 0.88)";
+    aviso.style.color = "#ffffff";
+    aviso.style.fontSize = "14px";
+    aviso.style.fontWeight = "700";
+    aviso.style.lineHeight = "1.35";
+    aviso.style.textAlign = "center";
+    aviso.style.boxShadow = "0 12px 30px rgba(0,0,0,0.22)";
+    aviso.style.backdropFilter = "blur(8px)";
+    aviso.style.webkitBackdropFilter = "blur(8px)";
+    aviso.style.opacity = "0";
+    aviso.style.pointerEvents = "none";
+    aviso.style.transition = "opacity .22s ease, transform .22s ease";
+    document.body.appendChild(aviso);
   }
-  if (moduleName === "Correspondencia" && !esRolCorrespondencia(rol) && !esRolDireccion(rol)) {
-    alert("Su rol es " + rol + ". No tiene acceso a este módulo.");
-    return;
-  }
-  if (moduleName === "Prefectura" && !esRolPrefectura(rol) && !esRolDireccion(rol)) {
-    alert("Su rol es " + rol + ". No tiene acceso a este módulo.");
-    return;
-  }
-  if (moduleName === "Docente" && !esRolDocente(rol) && !esRolDireccion(rol)) {
-    alert("Su rol es " + rol + ". No tiene acceso a este módulo.");
+
+  aviso.textContent = mensaje;
+
+  clearTimeout(aviso._sec2Timer);
+
+  requestAnimationFrame(function() {
+    aviso.style.opacity = "1";
+    aviso.style.transform = "translateX(-50%) translateY(0)";
+  });
+
+  aviso._sec2Timer = setTimeout(function() {
+    aviso.style.opacity = "0";
+    aviso.style.transform = "translateX(-50%) translateY(18px)";
+  }, 2300);
+}
+
+function openModule(moduleName) {
+  const rolUsuario = sessionStorage.getItem("userRol") || "";
+
+  /*
+    Regla oficial SEC2:
+    Cada usuario solo puede entrar al módulo que corresponde exactamente a su rol.
+
+    Dirección       → Dirección
+    Correspondencia → Correspondencia
+    Prefectura      → Prefectura
+    Docente         → Docente
+  */
+  if (rolUsuario !== moduleName) {
+    mostrarAvisoRolModulo(moduleName);
     return;
   }
 
@@ -391,8 +434,9 @@ function openModule(moduleName) {
   document.getElementById("moduleImportantText").textContent = config.importante;
   document.getElementById("accessTitle").textContent = "Acceso: " + moduleName;
   document.getElementById("accessText").textContent = config.acceso;
-  
-  const container = document.getElementById("moduleButtons"); container.innerHTML = "";
+
+  const container = document.getElementById("moduleButtons");
+  container.innerHTML = "";
 
   config.opciones.forEach(option => {
     const button = document.createElement("button");
@@ -408,9 +452,9 @@ function openModule(moduleName) {
     `;
     container.appendChild(button);
   });
+
   showScreen("moduleMenu");
 }
-
 function openOption(optionName) {
   if (optionName === "Mi perfil" || optionName === "Mi Perfil") return abrirMiPerfil();
   if (optionName === "Otorgar incidencia") return openTipoIncidencia();
