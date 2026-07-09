@@ -512,8 +512,8 @@ function cargarResumenPersona(idPersona) {
 }
 
 function renderResumenPersona(respuesta) {
-  const p = respuesta.persona;
-  const e = respuesta.estadisticas;
+  const p = respuesta.persona || {};
+  const e = normalizarEstadisticasResumen(respuesta.estadisticas, respuesta);
   const ultima = respuesta.ultimaIncidencia ? formatearFecha(respuesta.ultimaIncidencia.FechaInicio) : "Sin registros";
   const tituloOpciones = profileMode ? "Mi historial" : "Opciones de consulta";
   const descripcionHistorial = profileMode ? "Ver mi historial personal completo." : "Ver todas las incidencias registradas.";
@@ -525,18 +525,20 @@ function renderResumenPersona(respuesta) {
         <div class="big-avatar" data-icon="user"></div>
         <div>
           <h2 class="data-card-title">${escapeHTML(p.Nombre)} ${escapeHTML(p.Apellidos)}</h2>
-          <p class="data-card-text"><strong>Turno:</strong> ${TURNOS_TEXTO[p.Turno] || p.Turno}</p>
-          <p class="data-card-text"><strong>ID de Acceso:</strong> ${escapeHTML(p.IDAcceso)}</p>
+          <p class="data-card-text"><strong>Turno:</strong> ${TURNOS_TEXTO[p.Turno] || p.Turno || "Sin dato"}</p>
           <p class="data-card-text"><strong>Última incidencia:</strong> ${ultima}</p>
         </div>
       </div>
       <h2 class="section-title">Estadísticas rápidas</h2>
-      <section class="stat-grid">
-        ${statMini(e.total, "Total<br>incidencias", "blue", "humanitario-sindical")}
-        ${statMini(e.permisosOficiales, "Permisos<br>oficiales", "purple", "permiso-oficial")}
-        ${statMini(e.incapacidades, "Incapacidades", "blue", "incapacidad")}
-        ${statMini(e.comisiones, "Comisiones", "blue-soft", "comision-oficial")}
-        ${statMini(e.otras, "Otras", "gold", "especial")}
+      <section class="stat-grid profile-stat-grid">
+        ${statMini(e.total, "Total", "blue", "humanitario-sindical", "total")}
+        ${statMini(e.permisoOficial, "Permiso<br>oficial", "purple", "permiso-oficial", "permisoOficial")}
+        ${statMini(e.incapacidad, "Incapacidad", "blue", "incapacidad", "incapacidad")}
+        ${statMini(e.humanitarioSindical, "Humanitario<br>sindical", "green", "humanitario-sindical", "humanitarioSindical")}
+        ${statMini(e.humanitarioOficial, "Humanitario<br>oficial", "orange", "humanitario-oficial", "humanitarioOficial")}
+        ${statMini(e.comisionSindical, "Comisión<br>sindical", "purple-soft", "comision-sindical", "comisionSindical")}
+        ${statMini(e.comisionOficial, "Comisión<br>oficial", "blue-soft", "comision-oficial", "comisionOficial")}
+        ${statMini(e.especial, "Especial", "gold", "especial", "especial")}
       </section>
       <h2 class="section-title">${tituloOpciones}</h2>
       ${optionCard("Historial completo", descripcionHistorial, "green", "history", "cargarHistorialPersona('todas')")}
@@ -559,17 +561,179 @@ function renderResumenPersona(respuesta) {
       <button class="logout-fake" onclick="cerrarSesion()">Cerrar<br>sesión</button>
     </section>
   `;
-  document.getElementById("personSummaryContent").innerHTML = html; inicializarIconos();
+  document.getElementById("personSummaryContent").innerHTML = html;
+  inicializarIconos();
+  actualizarEstadisticasResumenDesdeHistorial();
 }
 
-function statMini(num, label, color, icono) {
+function statMini(num, label, color, icono, statKey) {
+  const attr = statKey ? ` data-profile-stat="${statKey}"` : "";
   return `
     <article class="stat-small bg-${color}">
       <div class="mini-icon color-${color}" data-icon="${icono}"></div>
-      <div class="stat-num color-${color}">${num}</div>
+      <div class="stat-num color-${color}"${attr}>${numeroEnteroSeguro(num)}</div>
       <div class="stat-label">${label}</div>
     </article>
   `;
+}
+
+function numeroEnteroSeguro(valor) {
+  if (valor === null || valor === undefined || valor === "") return 0;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function normalizarEstadisticasResumen(estadisticas, respuesta) {
+  const e = estadisticas || {};
+  const conteoLocal = contarTiposIncidenciasResumen(obtenerIncidenciasDesdeRespuestaResumen(respuesta));
+
+  return {
+    total: obtenerValorEstadistica(e, ["total", "Total", "totalIncidencias", "total_incidencias"], conteoLocal.total),
+    permisoOficial: obtenerValorEstadistica(e, ["permisoOficial", "permisoOficiales", "permisosOficiales", "permiso_oficial", "permisos_oficiales", "Permiso oficial", "Permiso Oficial"], conteoLocal.permisoOficial),
+    incapacidad: obtenerValorEstadistica(e, ["incapacidad", "incapacidades", "Incapacidad", "Incapacidades"], conteoLocal.incapacidad),
+    humanitarioSindical: obtenerValorEstadistica(e, ["humanitarioSindical", "humanitariosSindicales", "humanitario_sindical", "humanitarios_sindicales", "Humanitario sindical", "Humanitario Sindical"], conteoLocal.humanitarioSindical),
+    humanitarioOficial: obtenerValorEstadistica(e, ["humanitarioOficial", "humanitariosOficiales", "humanitario_oficial", "humanitarios_oficiales", "Humanitario oficial", "Humanitario Oficial"], conteoLocal.humanitarioOficial),
+    comisionSindical: obtenerValorEstadistica(e, ["comisionSindical", "comisionesSindicales", "comisiónSindical", "comisiones_sindicales", "comision_sindical", "Comisión sindical", "Comision sindical", "Comisión Sindical", "Comision Sindical"], conteoLocal.comisionSindical),
+    comisionOficial: obtenerValorEstadistica(e, ["comisionOficial", "comisionesOficiales", "comisiónOficial", "comisiones_oficiales", "comision_oficial", "Comisión oficial", "Comision oficial", "Comisión Oficial", "Comision Oficial"], conteoLocal.comisionOficial),
+    especial: obtenerValorEstadistica(e, ["especial", "especiales", "Especial", "Especiales"], conteoLocal.especial)
+  };
+}
+
+function obtenerValorEstadistica(estadisticas, nombres, respaldo) {
+  const e = estadisticas || {};
+
+  for (const nombre of nombres) {
+    if (e[nombre] !== undefined && e[nombre] !== null && e[nombre] !== "") {
+      return numeroEnteroSeguro(e[nombre]);
+    }
+  }
+
+  const contenedores = [e.porTipo, e.por_tipo, e.tipos, e.detalle, e.detallePorTipo, e.detalle_por_tipo];
+
+  for (const contenedor of contenedores) {
+    const valor = buscarValorEnContenedorEstadisticas(contenedor, nombres);
+    if (valor !== null) return valor;
+  }
+
+  if (Array.isArray(e)) {
+    const valor = buscarValorEnContenedorEstadisticas(e, nombres);
+    if (valor !== null) return valor;
+  }
+
+  return numeroEnteroSeguro(respaldo);
+}
+
+function buscarValorEnContenedorEstadisticas(contenedor, nombres) {
+  if (!contenedor) return null;
+
+  if (Array.isArray(contenedor)) {
+    for (const item of contenedor) {
+      const tipo = normalizarTextoComparacion(item.tipo || item.TipoIncidencia || item.nombre || item.Nombre || item.categoria || item.Categoria);
+      if (!tipo) continue;
+
+      const coincide = nombres.some(nombre => normalizarTextoComparacion(nombre) === tipo);
+      if (coincide) {
+        return numeroEnteroSeguro(item.cantidad ?? item.total ?? item.valor ?? item.count ?? item.dias ?? 0);
+      }
+    }
+    return null;
+  }
+
+  if (typeof contenedor === "object") {
+    for (const nombre of nombres) {
+      if (contenedor[nombre] !== undefined && contenedor[nombre] !== null && contenedor[nombre] !== "") {
+        return numeroEnteroSeguro(contenedor[nombre]);
+      }
+    }
+
+    const claves = Object.keys(contenedor);
+    for (const clave of claves) {
+      const coincide = nombres.some(nombre => normalizarTextoComparacion(nombre) === normalizarTextoComparacion(clave));
+      if (coincide) return numeroEnteroSeguro(contenedor[clave]);
+    }
+  }
+
+  return null;
+}
+
+function obtenerIncidenciasDesdeRespuestaResumen(respuesta) {
+  if (!respuesta) return [];
+  const posibles = [
+    respuesta.incidencias,
+    respuesta.historial,
+    respuesta.historialCompleto,
+    respuesta.historial_completo,
+    respuesta.registros,
+    respuesta.detalle,
+    respuesta.datos
+  ];
+
+  for (const posible of posibles) {
+    if (Array.isArray(posible)) return posible;
+  }
+
+  return [];
+}
+
+function contarTiposIncidenciasResumen(incidencias) {
+  const conteo = {
+    total: 0,
+    permisoOficial: 0,
+    incapacidad: 0,
+    humanitarioSindical: 0,
+    humanitarioOficial: 0,
+    comisionSindical: 0,
+    comisionOficial: 0,
+    especial: 0
+  };
+
+  if (!Array.isArray(incidencias)) return conteo;
+
+  incidencias.forEach(function(incidencia) {
+    conteo.total += 1;
+    const tipo = normalizarTextoComparacion(incidencia.TipoIncidencia || incidencia.tipo || incidencia.nombre || "");
+
+    if (tipo.includes("permiso oficial") || tipo.includes("permiso personal")) conteo.permisoOficial += 1;
+    else if (tipo.includes("incapacidad") || tipo.includes("licencia medica")) conteo.incapacidad += 1;
+    else if (tipo.includes("humanitario sindical")) conteo.humanitarioSindical += 1;
+    else if (tipo.includes("humanitario oficial")) conteo.humanitarioOficial += 1;
+    else if (tipo.includes("comision sindical")) conteo.comisionSindical += 1;
+    else if (tipo.includes("comision oficial") || tipo === "comision") conteo.comisionOficial += 1;
+    else if (tipo.includes("especial")) conteo.especial += 1;
+  });
+
+  return conteo;
+}
+
+function actualizarEstadisticasResumenDesdeHistorial() {
+  if (!selectedPersonID || typeof API === "undefined" || typeof API.obtenerHistorialPersona !== "function") return;
+
+  API.obtenerHistorialPersona(selectedPersonID, "todas", function(respuesta) {
+    const conteo = contarTiposIncidenciasResumen(respuesta.incidencias || []);
+    actualizarNumeroEstadisticaPerfil("total", conteo.total);
+    actualizarNumeroEstadisticaPerfil("permisoOficial", conteo.permisoOficial);
+    actualizarNumeroEstadisticaPerfil("incapacidad", conteo.incapacidad);
+    actualizarNumeroEstadisticaPerfil("humanitarioSindical", conteo.humanitarioSindical);
+    actualizarNumeroEstadisticaPerfil("humanitarioOficial", conteo.humanitarioOficial);
+    actualizarNumeroEstadisticaPerfil("comisionSindical", conteo.comisionSindical);
+    actualizarNumeroEstadisticaPerfil("comisionOficial", conteo.comisionOficial);
+    actualizarNumeroEstadisticaPerfil("especial", conteo.especial);
+  }, function(error) {
+    console.warn("No se pudieron recalcular las estadísticas exactas del perfil:", error);
+  });
+}
+
+function actualizarNumeroEstadisticaPerfil(clave, valor) {
+  const elemento = document.querySelector(`[data-profile-stat="${clave}"]`);
+  if (elemento) elemento.textContent = numeroEnteroSeguro(valor);
+}
+
+function normalizarTextoComparacion(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function optionCard(title, desc, color, icon, action) {
