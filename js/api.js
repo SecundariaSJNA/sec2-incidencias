@@ -1,6 +1,6 @@
 /* =========================================================
-   SEC2 API — Supabase
-   Compatibilidad con app.js heredado
+   SEC2 API — Supabase V2
+   Capa compatible con app.js / incidencias.js / reportes.js
    ========================================================= */
 
 const SEC2_API = (() => {
@@ -81,9 +81,70 @@ const SEC2_API = (() => {
     };
   }
 
+  function idSesion() {
+    return sessionStorage.getItem("userIDAcceso") || "";
+  }
+
+  async function obtenerUsuariosParaFormularioAsync() {
+    return await rpc("obtener_usuarios_para_formulario_sec2", {
+      p_id_acceso_sesion: idSesion()
+    });
+  }
+
+  async function obtenerResumenPersonaAsync(idAccesoPersona) {
+    return await rpc("obtener_resumen_persona_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_acceso_persona: normalizarTexto(idAccesoPersona)
+    });
+  }
+
+  async function obtenerHistorialPersonaAsync(idAccesoPersona, filtro) {
+    return await rpc("obtener_historial_persona_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_acceso_persona: normalizarTexto(idAccesoPersona),
+      p_filtro: normalizarTexto(filtro || "todas")
+    });
+  }
+
+  async function obtenerReporteDiaAsync() {
+    return await rpc("obtener_reporte_dia_sec2", {
+      p_id_acceso_sesion: idSesion()
+    });
+  }
+
+  async function obtenerReporteSemanalAsync() {
+    return await rpc("obtener_reporte_semanal_sec2", {
+      p_id_acceso_sesion: idSesion()
+    });
+  }
+
+  async function consultarFechasAsync(datos) {
+    return await rpc("consultar_fechas_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_fecha_inicio: datos.FechaInicio,
+      p_fecha_fin: datos.FechaFin
+    });
+  }
+
+  async function obtenerEstadisticaMensualAsync(idAccesoPersona, mes, anio) {
+    return await rpc("obtener_estadistica_mensual_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_acceso_persona: normalizarTexto(idAccesoPersona),
+      p_mes: Number(mes),
+      p_anio: Number(anio)
+    });
+  }
+
   return {
     rpc,
-    iniciarSesionAsync
+    iniciarSesionAsync,
+    obtenerUsuariosParaFormularioAsync,
+    obtenerResumenPersonaAsync,
+    obtenerHistorialPersonaAsync,
+    obtenerReporteDiaAsync,
+    obtenerReporteSemanalAsync,
+    consultarFechasAsync,
+    obtenerEstadisticaMensualAsync
   };
 })();
 
@@ -96,13 +157,9 @@ const API = {
     SEC2_API.iniciarSesionAsync(idAcceso, contrasena)
       .then(function(respuesta) {
         if (respuesta.success) {
-          if (typeof onSuccess === "function") {
-            onSuccess(respuesta.data);
-          }
+          if (typeof onSuccess === "function") onSuccess(respuesta.data);
         } else {
-          if (typeof onFailure === "function") {
-            onFailure(respuesta.error);
-          }
+          if (typeof onFailure === "function") onFailure(respuesta.error);
         }
       })
       .catch(function(error) {
@@ -122,6 +179,80 @@ const API = {
 
   cerrarSesionLocal: function() {
     sessionStorage.clear();
+  },
+
+  obtenerUsuariosParaFormulario: function(onSuccess, onFailure) {
+    SEC2_API.obtenerUsuariosParaFormularioAsync()
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data || []); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerResumenPersona: function(idAccesoPersona, onSuccess, onFailure) {
+    SEC2_API.obtenerResumenPersonaAsync(idAccesoPersona)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerHistorialPersona: function(idAccesoPersona, filtro, onSuccess, onFailure) {
+    SEC2_API.obtenerHistorialPersonaAsync(idAccesoPersona, filtro)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerReporteDia: function(onSuccess, onFailure) {
+    SEC2_API.obtenerReporteDiaAsync()
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerReporteSemanal: function(onSuccess, onFailure) {
+    SEC2_API.obtenerReporteSemanalAsync()
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  consultarFechas: function(datos, onSuccess, onFailure) {
+    SEC2_API.consultarFechasAsync(datos)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerEstadisticaMensual: function(idAccesoPersona, mes, anio, onSuccess, onFailure) {
+    SEC2_API.obtenerEstadisticaMensualAsync(idAccesoPersona, mes, anio)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
+  },
+
+  obtenerDetalleIncidencia: function(idIncidencia, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Detalle de incidencias aún no migrado a Supabase.");
+  },
+
+  guardarIncidencia: function(datos, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Guardar incidencias aún no migrado a Supabase.");
+  },
+
+  guardarUsosPermisoOficial: function(idIncidencia, datos, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Uso de permisos oficiales aún no migrado a Supabase.");
+  },
+
+  eliminarIncidencia: function(idIncidencia, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Eliminar incidencias aún no migrado a Supabase.");
+  },
+
+  obtenerNotificacionesUsuario: function(onSuccess, onFailure) {
+    if (typeof onSuccess === "function") onSuccess({ notificaciones: [] });
+  },
+
+  obtenerDetalleNotificacion: function(idNotificacion, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Notificaciones aún no migradas a Supabase.");
+  },
+
+  guardarNotificacion: function(datos, onSuccess, onFailure) {
+    if (typeof onFailure === "function") onFailure("Enviar notificaciones aún no migrado a Supabase.");
+  },
+
+  obtenerNotificacionesEnviadas: function(onSuccess, onFailure) {
+    if (typeof onSuccess === "function") onSuccess({ notificaciones: [] });
   }
 };
 
