@@ -24,6 +24,71 @@
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/SecSJNA/sec2-app/d810700d427ea454662ff6e4836c4d6431cb8115/logoPng.png">
   
   <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    .profile-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .profile-stat-grid .stat-small {
+      min-height: 106px;
+      padding: 11px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .profile-stat-grid .mini-icon {
+      width: 30px;
+      height: 30px;
+      margin-bottom: 5px;
+      flex: 0 0 auto;
+    }
+
+    .profile-stat-grid .stat-num {
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .profile-stat-grid .stat-label {
+      font-size: 10.5px;
+      line-height: 1.15;
+      text-align: center;
+      overflow-wrap: normal;
+      word-break: normal;
+      hyphens: none;
+    }
+
+    @media (max-width: 360px) {
+      .profile-stat-grid {
+        gap: 7px;
+      }
+
+      .profile-stat-grid .stat-small {
+        min-height: 98px;
+        padding: 9px 4px;
+      }
+
+      .profile-stat-grid .mini-icon {
+        width: 26px;
+        height: 26px;
+      }
+
+      .profile-stat-grid .stat-num {
+        font-size: 21px;
+      }
+
+      .profile-stat-grid .stat-label {
+        font-size: 9.5px;
+      }
+    }
+  </style>
 </head>
 
 <body>
