@@ -1,0 +1,95 @@
+codigo_auditoria,nombre,apellido_paterno,apellido_materno,rol,turno,id_acceso,contrasena
+M001,Esteban,Aguilar,Reyes,Docente,V,ESAGRE,EAR1234
+M002,Magdaleno,Aguilar,Reyes,Docente,M,MAAGRE,MAR1234
+M003,Maricruz,Aguirre,Díaz,Docente,M,MAAGDI,MAD1234
+M004,Irma Juana,Argueta,Maya,Docente,V,IRARMA,IAM1234
+M005,Yadira Adriana,Argueta,Maya,Docente,M,YAARMA,YAM1234
+D002,Nicolás,Arreola,García,Direccion,A,NIARGA,NAG1234
+M006,Alicia,Ávila,Figueroa,Docente,V,ALAVFI,AAF1234
+M007,José Luis,Avilés,Soto,Docente,A,JOAVSO,JAS1234
+M008,Lilia,Ayala,Cisneros,Docente,M,LIAYCI,LAC1234
+M009,Arturo,Barrera,Leyva,Docente,A,ARBALE,ABL1234
+P002,Natividad Natalia,Cabañas,Trigo,Prefectura,M,NACATR,NCT1234
+M010,Jorge Alejandro,Camacho,Santos,Docente,M,JOCASA,JCS1234
+M011,Juan,Camacho,Santos,Docente,A,JUCASA,JCS1234
+M012,Alejandro,Carrillo,Pérez,Docente,A,ALCAPE,ACP1234
+P004,J. Antonio,Castro,Soto,Prefectura,M,J.CASO,JCS1234
+M013,Susana,Chávez,Hernández,Docente,V,SUCHHE,SCH1234
+M014,Ofelia Elizabeth,Cisneros,Valdez,Docente,A,OFCIVA,OCV1234
+M015,Edgar Iván,Colín,García,Docente,M,EDCOGA,ECG1234
+M016,María De Los Ángeles,Coronel,Silva,Docente,A,MACOSI,MCS1234
+M017,Karla Elizabeth,Cortés,Flores,Docente,V,KACOFL,KCF1234
+C002,Fany,Cruz,Duarte,Correspondencia,M,FACRDU,FCD1234
+M018,Orlando,Cruz,Sánchez,Docente,A,ORCRSA,OCS1234
+M019,Linda Crystal,Delgado,Delgado,Docente,V,LIDEDE,LDD1234
+M020,Samuel,Díaz,Alatorre,Docente,M,SADIAL,SDA1234
+M021,José Arturo,Domínguez,Soto,Docente,V,JODOSO,JDS1234
+M022,Diana,Echeverría,Guillén,Docente,V,DIECGU,DEG1234
+M023,Elizabeth,Espinosa,Vilchis,Docente,A,ELESVI,EEV1234
+P005,Joseph Michael,Esquivel,Mondragón,Prefectura,M,JOESMO,JEM1234
+M024,Ana Margarita,Esquivel,Pérez,Docente,A,ANESPE,AEP1234
+M025,Gabriel Alejandro,Flores,Coria,Docente,A,GAFLCO,GFC1234
+M026,Jorge Rodrigo,Flores,Corona,Docente,M,JOFLCO,JFC1234
+M027,Feliciano,Gama,Hernández,Docente,V,FEGAHE,FGH1234
+D001,Braulio David,García,Juárez,Direccion,A,BRGAJU,BGJ1234
+M028,Jaime Miguel,García,Juárez,Docente,A,JAGAJU,JGJ1234
+M029,Oscar Giovanni,García,Juárez,Docente,V,OSGAJU,OGJ1234
+M030,J. Remedios,García,Leyva,Docente,M,J.GALE,JGL1234
+M031,Blanca Estela,García,Medina,Docente,V,BLGAME,BGM1234
+M032,Gerardo,García,Medina,Docente,A,GEGAME,GGM1234
+M033,Martha Elena,García,Medina,Docente,V,MAGAME,MGM1234
+M034,Yolanda,García,Medina,Docente,A,YOGAME,YGM1234
+M035,Gabriel,García,Mora,Docente,A,GAGAMO,GGM1234
+M036,Cynthia Wendoline,García,Ramírez,Docente,A,CYGARA,CGR1234
+M037,Gabriel,Garduño,López,Docente,V,GAGALO,GGL1234
+M038,Eduardo,Garduño,Marín,Docente,V,EDGAMA,EGM1234
+M039,Pablo Edgar,Garduño,Maya,Docente,V,PAGAMA,PGM1234
+M040,Alejandro,Gómez,Blanco,Docente,A,ALGOBL,AGB1234
+M041,José Densy,Gómez,Reyes,Docente,V,JOGORE,JGR1234
+M042,Daniel,González,Monroy,Docente,V,DAGOMO,DGM1234
+M043,Zoila,González,Rivera,Docente,V,ZOGORI,ZGR1234
+M044,Carmen Isabel,González,Solís,Docente,A,CAGOSO,CGS1234
+M045,Jessica Alejandra,Gudiño,Alatorre,Docente,M,JEGUAL,JGA1234
+M046,Laura,Guerrero,Quintana,Docente,V,LAGUQU,LGQ1234
+M047,Noemí Alejandra,Guerrero,Quintana,Docente,A,NOGUQU,NGQ1234
+M048,Guillermo Ernesto,Hope,Cruz,Docente,A,GUHOCR,GHC1234
+M049,Esveide,Jiménez,Olivares,Docente,A,ESJIOL,EJO1234
+C001,Alma Daniela,Loza,Nateras,Correspondencia,V,ALLONA,ALN1234
+M050,Sonia,Marín,Echeverría,Docente,M,SOMAEC,SME1234
+M051,Martha Olivia,Martínez,Vázquez,Docente,A,MAMAVA,MMV1234
+M052,Olga,Maya,Rodríguez,Docente,V,OLMARO,OMR1234
+M053,Oscar,Mejía,Urquiza,Docente,M,OSMEUR,OMU1234
+M054,Eric Rodolfo,Miranda,Arteaga,Docente,A,ERMIAR,EMA1234
+M055,Luis Enrique,Miranda,Arteaga,Docente,A,LUMIAR,LMA1234
+M056,Jose Antonio,Mondragon,Navarrete,Docente,V,JOMONA,JMN1234
+M057,Jose Antonio,Monroy,Valdés,Docente,A,JOMOVA,JMV1234
+M058,Angélica,Nateras,Paniagua,Docente,M,ANNAPA,ANP1234
+M059,Elvia,Nieto,Mendoza,Docente,V,ELNIME,ENM1234
+D001,Anahí Massiel,Paulín,Nateras,Direccion,A,ANPANA,APN1234
+M060,Julio Daniel,Paulino,Martínez,Docente,V,JUPAMA,JPM1234
+P003,Blanca Estela,Pedraza,Mondragón,Prefectura,V,BLPEMO,BPM1234
+M061,Francisco Javier,Reyes,Gomez,Docente,M,FRREGO,FRG1234
+M062,Dominga,Reyes,Mendoza,Docente,A,DOREME,DRM1234
+M063,Alfonso Ricardo,Rivas,Medina,Docente,V,ALRIME,ARM1234
+M064,Genaro,Rodríguez,Reyes,Docente,V,GERORE,GRR1234
+M065,Eunice,Romero,Hernández,Docente,M,EUROHE,ERH1234
+M066,Sergio Alfredo,Rosales,Gaytán,Docente,A,SEROGA,SRG1234
+M067,Jesús Antonio,Serrano,Miralrio,Docente,A,JESEMI,JSM1234
+M068,Manuel Adolfo,Sierra,Andrade,Docente,V,MASIAN,MSA1234
+M069,Alejandra Irma,Solís,Guerrero,Docente,M,ALSOGU,ASG1234
+M070,Yina,Soria,García,Docente,A,YISOGA,YSG1234
+M071,David,Soto,Guzmán,Docente,M,DASOGU,DSG1234
+M072,Joseph,Suarez,Martinez,Docente,A,JOSUMA,JSM1234
+M073,Norma,Tavira,Arguello,Docente,M,NOTAAR,NTA1234
+M074,Eliana Elizabeth,Tavira,Chávez,Docente,V,ELTACH,ETC1234
+M075,Arturo,Torres,Contreras,Docente,M,ARTOCO,ATC1234
+P001,Jaime,Torres,Rodea,Prefectura,V,JATORO,JTR1234
+M076,Alain Darío,Vaca,Cortés,Docente,V,ALVACO,AVC1234
+M077,Mayra Beatriz,Valdespino,Cacique,Docente,A,MAVACA,MVC1234
+M078,Marilú,Valdez,Linares,Docente,V,MAVALI,MVL1234
+M079,Edwin Giovanny,Valencia,Nateras,Docente,A,EDVANA,EVN1234
+M080,Ytzela Alejandra,Vargas,Garduño,Docente,A,YTVAGA,YVG1234
+M081,Susana,Vázquez,Rosas,Docente,V,SUVARO,SVR1234
+M082,Georgina,Vega,Vaca,Docente,A,GEVEVA,GVV1234
+M083,Fabiola,Zannatta,Cázarez,Docente,A,FAZACA,FZC1234
+M084,Francisco Daniel,Zavala,Alvarez,Docente,M,FRZAAL,FZA1234
