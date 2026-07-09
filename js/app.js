@@ -1229,9 +1229,14 @@ function abrirFormularioIncidencia(tipo) {
 function guardarFormulario() {
   const usrIDUsuario = document.getElementById("formUsuario").value;
   const usuarioIDAcceso = sessionStorage.getItem("userIDAcceso");
-  
+
+  if (!selectedType || !selectedType.nombre) {
+    mostrarEstadoFormulario("Error: no se detectó el tipo de incidencia seleccionado.", true, false);
+    return;
+  }
+
   if (!usrIDUsuario) { alert("Selecciona un docente afectado."); return; }
-  
+
   const datos = {
     IDUsuario: usrIDUsuario, TipoIncidencia: selectedType.nombre,
     FechaInicio: valorInput("formFechaInicio"), FechaFin: valorInput("formFechaFin"),
@@ -1241,15 +1246,39 @@ function guardarFormulario() {
     LicenciaMedica: valorInput("formLicencia"), Observaciones: valorInput("formObservaciones"),
     RegistradoPor: usuarioIDAcceso
   };
-  
-  showScreen("splash", false); mostrarEstadoFormulario("Guardando incidencia...", false, false);
-  
+
+  // SEC2_FIX_GUARDAR_SIN_SPLASH_20260709
+  // No cambiar de pantalla aquí. El estado debe verse dentro del formulario.
+  mostrarEstadoFormulario("Guardando incidencia...", false, false);
+
   API.guardarIncidencia(datos, resultado => {
     mostrarEstadoFormulario("Incidencia guardada correctamente.", false, true);
-    setTimeout(function() { abrirDetalleIncidencia(resultado.IDIncidencia); }, 1200);
+
+    const idIncidenciaGuardada = obtenerIDIncidenciaDesdeRespuesta(resultado);
+
+    if (idIncidenciaGuardada) {
+      setTimeout(function() { abrirDetalleIncidencia(idIncidenciaGuardada); }, 900);
+    } else {
+      console.warn("La incidencia se guardó, pero la respuesta no incluyó IDIncidencia:", resultado);
+      setTimeout(function() {
+        mostrarEstadoFormulario("Incidencia guardada correctamente. Consulta el historial para verla.", false, true);
+      }, 900);
+    }
   }, error => {
     mostrarEstadoFormulario(obtenerMensajeError(error), true, false);
   });
+}
+
+function obtenerIDIncidenciaDesdeRespuesta(resultado) {
+  if (!resultado) return "";
+
+  return resultado.IDIncidencia ||
+    resultado.idIncidencia ||
+    resultado.id_incidencia ||
+    resultado.id ||
+    (resultado.incidencia && (resultado.incidencia.IDIncidencia || resultado.incidencia.idIncidencia || resultado.incidencia.id_incidencia || resultado.incidencia.id)) ||
+    (Array.isArray(resultado) && resultado[0] && (resultado[0].IDIncidencia || resultado[0].idIncidencia || resultado[0].id_incidencia || resultado[0].id)) ||
+    "";
 }
 
 function mostrarEstadoFormulario(mensaje, esError, esOk) {
