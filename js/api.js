@@ -1,6 +1,11 @@
 /* =========================================================
-   SEC2 API — Supabase V2
+   SEC2 API — Supabase V3
    Capa compatible con app.js / incidencias.js / reportes.js
+
+   Cambio V3:
+   - Migrado guardarIncidencia a Supabase.
+   - Agregado intento de detalle de incidencia por RPC/fallback directo.
+   - Se conservan pendientes edición, eliminación y notificaciones.
    ========================================================= */
 
 const SEC2_API = (() => {
@@ -26,15 +31,170 @@ const SEC2_API = (() => {
     return valor === null || valor === undefined ? "" : String(valor).trim();
   }
 
+  function valorONull(valor) {
+    const texto = normalizarTexto(valor);
+    return texto ? texto : null;
+  }
+
+  function fechaONull(valor) {
+    const texto = normalizarTexto(valor);
+    return texto ? texto : null;
+  }
+
   function normalizarRolFrontend(rolClave) {
     const clave = normalizarTexto(rolClave).toLowerCase();
 
-    if (clave === "direccion") return "Direccion";
+    if (clave === "direccion" || clave === "dirección") return "Direccion";
     if (clave === "correspondencia") return "Correspondencia";
     if (clave === "prefectura") return "Prefectura";
     if (clave === "docente") return "Docente";
 
     return normalizarTexto(rolClave);
+  }
+
+  function idSesion() {
+    return sessionStorage.getItem("userIDAcceso") || "";
+  }
+
+  function generarIDIncidenciaTemporal() {
+    const fecha = new Date();
+    const yyyy = fecha.getFullYear();
+    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+    const dd = String(fecha.getDate()).padStart(2, "0");
+    const hh = String(fecha.getHours()).padStart(2, "0");
+    const mi = String(fecha.getMinutes()).padStart(2, "0");
+    const ss = String(fecha.getSeconds()).padStart(2, "0");
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `INC-${yyyy}${mm}${dd}-${hh}${mi}${ss}-${rand}`;
+  }
+
+  function esPermisoOficial(datos) {
+    const tipo = normalizarTexto(datos && datos.TipoIncidencia).toLowerCase();
+    return tipo === "permiso oficial";
+  }
+
+  function normalizarIncidenciaParaRPC(datos) {
+    const d = datos || {};
+    const oficial = esPermisoOficial(d);
+
+    return {
+      p_id_acceso_sesion: idSesion(),
+      p_id_acceso_persona: normalizarTexto(d.IDUsuario),
+      p_tipo_incidencia: normalizarTexto(d.TipoIncidencia),
+      p_fecha_inicio: oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio),
+      p_fecha_fin: oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin),
+      p_fecha_oficial_1: fechaONull(d.FechaOficial1),
+      p_fecha_oficial_2: fechaONull(d.FechaOficial2),
+      p_fecha_oficial_3: fechaONull(d.FechaOficial3),
+      p_uso_1_fecha: fechaONull(d.Uso1Fecha),
+      p_uso_2_fecha: fechaONull(d.Uso2Fecha),
+      p_uso_3_fecha: fechaONull(d.Uso3Fecha),
+      p_licencia_medica: valorONull(d.LicenciaMedica),
+      p_observaciones: valorONull(d.Observaciones),
+      p_registrado_por: normalizarTexto(d.RegistradoPor || idSesion())
+    };
+  }
+
+  function validarDatosIncidencia(datos) {
+    const d = datos || {};
+
+    if (!normalizarTexto(d.IDUsuario)) {
+      throw new Error("Seleccione el docente afectado.");
+    }
+
+    if (!normalizarTexto(d.TipoIncidencia)) {
+      throw new Error("Seleccione el tipo de incidencia.");
+    }
+
+    if (esPermisoOficial(d)) {
+      if (!fechaONull(d.FechaOficial1) && !fechaONull(d.FechaOficial2) && !fechaONull(d.FechaOficial3)) {
+        throw new Error("Capture al menos una fecha oficial autorizada.");
+      }
+      return;
+    }
+
+    if (!fechaONull(d.FechaInicio) || !fechaONull(d.FechaFin)) {
+      throw new Error("Capture fecha inicio y fecha fin.");
+    }
+
+    if (fechaONull(d.FechaInicio) > fechaONull(d.FechaFin)) {
+      throw new Error("La fecha inicio no puede ser posterior a la fecha fin.");
+    }
+  }
+
+  function normalizarRespuestaGuardado(respuesta, idRespaldo) {
+    const fila = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+
+    if (!fila) {
+      return {
+        success: true,
+        IDIncidencia: idRespaldo,
+        incidencia: { IDIncidencia: idRespaldo }
+      };
+    }
+
+    if (fila.success === false) {
+      throw new Error(fila.error || "No fue posible guardar la incidencia.");
+    }
+
+    const id = fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || idRespaldo;
+
+    return {
+      success: true,
+      IDIncidencia: id,
+      incidencia: Object.assign({}, fila, { IDIncidencia: id })
+    };
+  }
+
+  function normalizarIncidenciaDesdeBD(fila) {
+    if (!fila) return null;
+
+    return {
+      IDIncidencia: fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || "",
+      IDUsuario: fila.IDUsuario || fila.idUsuario || fila.id_usuario || fila.id_acceso_persona || fila.usuario_id || "",
+      Nombre: fila.Nombre || fila.nombre || fila.usuario_nombre || "",
+      Apellidos: fila.Apellidos || fila.apellidos || fila.usuario_apellidos || "",
+      Correo: fila.Correo || fila.correo || "",
+      Rol: fila.Rol || fila.rol || "",
+      Turno: fila.Turno || fila.turno || fila.turno_clave || "",
+      TipoIncidencia: fila.TipoIncidencia || fila.tipoIncidencia || fila.tipo_incidencia || fila.tipo || "",
+      FechaInicio: fila.FechaInicio || fila.fechaInicio || fila.fecha_inicio || "",
+      FechaFin: fila.FechaFin || fila.fechaFin || fila.fecha_fin || "",
+      LicenciaMedica: fila.LicenciaMedica || fila.licenciaMedica || fila.licencia_medica || "",
+      Observaciones: fila.Observaciones || fila.observaciones || "",
+      RegistradoPor: fila.RegistradoPor || fila.registradoPor || fila.registrado_por || "",
+      FechaRegistro: fila.FechaRegistro || fila.fechaRegistro || fila.fecha_registro || fila.created_at || "",
+      Estado: fila.Estado || fila.estado || "Activa",
+      FechaOficial1: fila.FechaOficial1 || fila.fechaOficial1 || fila.fecha_oficial_1 || "",
+      FechaOficial2: fila.FechaOficial2 || fila.fechaOficial2 || fila.fecha_oficial_2 || "",
+      FechaOficial3: fila.FechaOficial3 || fila.fechaOficial3 || fila.fecha_oficial_3 || "",
+      Uso1Fecha: fila.Uso1Fecha || fila.uso1Fecha || fila.uso_1_fecha || "",
+      Uso2Fecha: fila.Uso2Fecha || fila.uso2Fecha || fila.uso_2_fecha || "",
+      Uso3Fecha: fila.Uso3Fecha || fila.uso3Fecha || fila.uso_3_fecha || "",
+      Uso1Estado: fila.Uso1Estado || fila.uso1Estado || fila.uso_1_estado || "Pendiente",
+      Uso2Estado: fila.Uso2Estado || fila.uso2Estado || fila.uso_2_estado || "Pendiente",
+      Uso3Estado: fila.Uso3Estado || fila.uso3Estado || fila.uso_3_estado || "Pendiente"
+    };
+  }
+
+  function normalizarRespuestaDetalle(respuesta) {
+    const fila = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+
+    if (!fila) {
+      throw new Error("No se encontró la incidencia solicitada.");
+    }
+
+    if (fila.success === false) {
+      throw new Error(fila.error || "No fue posible consultar el detalle de la incidencia.");
+    }
+
+    const incidencia = fila.incidencia ? normalizarIncidenciaDesdeBD(fila.incidencia) : normalizarIncidenciaDesdeBD(fila);
+
+    return {
+      incidencia,
+      puedeEditar: Boolean(fila.puedeEditar ?? fila.puede_editar ?? false),
+      puedeEliminar: Boolean(fila.puedeEliminar ?? fila.puede_eliminar ?? false)
+    };
   }
 
   async function iniciarSesionAsync(idAcceso, contrasena) {
@@ -79,10 +239,6 @@ const SEC2_API = (() => {
         Activo: fila.activo
       }
     };
-  }
-
-  function idSesion() {
-    return sessionStorage.getItem("userIDAcceso") || "";
   }
 
   async function obtenerUsuariosParaFormularioAsync() {
@@ -135,6 +291,150 @@ const SEC2_API = (() => {
     });
   }
 
+  async function guardarIncidenciaAsync(datos) {
+    validarDatosIncidencia(datos);
+
+    const idRespaldo = generarIDIncidenciaTemporal();
+    const parametros = normalizarIncidenciaParaRPC(datos);
+    parametros.p_id_incidencia_respaldo = idRespaldo;
+
+    try {
+      const respuesta = await rpc("guardar_incidencia_sec2", parametros);
+      return normalizarRespuestaGuardado(respuesta, idRespaldo);
+    } catch (errorRPC) {
+      return await guardarIncidenciaFallbackDirecto(datos, idRespaldo, errorRPC);
+    }
+  }
+
+  async function guardarIncidenciaFallbackDirecto(datos, idRespaldo, errorRPC) {
+    const supabase = getClient();
+    const d = datos || {};
+    const oficial = esPermisoOficial(d);
+    const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
+    const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
+    const ahoraISO = new Date().toISOString();
+
+    const filas = [
+      {
+        tabla: "Incidencias",
+        fila: {
+          IDIncidencia: idRespaldo,
+          IDUsuario: normalizarTexto(d.IDUsuario),
+          TipoIncidencia: normalizarTexto(d.TipoIncidencia),
+          FechaInicio: fechaInicio,
+          FechaFin: fechaFin,
+          LicenciaMedica: valorONull(d.LicenciaMedica),
+          Observaciones: valorONull(d.Observaciones),
+          RegistradoPor: normalizarTexto(d.RegistradoPor || idSesion()),
+          FechaRegistro: ahoraISO,
+          Estado: "Activa",
+          FechaOficial1: fechaONull(d.FechaOficial1),
+          FechaOficial2: fechaONull(d.FechaOficial2),
+          FechaOficial3: fechaONull(d.FechaOficial3),
+          Uso1Fecha: fechaONull(d.Uso1Fecha),
+          Uso2Fecha: fechaONull(d.Uso2Fecha),
+          Uso3Fecha: fechaONull(d.Uso3Fecha),
+          Uso1Estado: fechaONull(d.Uso1Fecha) ? "Utilizada" : "Pendiente",
+          Uso2Estado: fechaONull(d.Uso2Fecha) ? "Utilizada" : "Pendiente",
+          Uso3Estado: fechaONull(d.Uso3Fecha) ? "Utilizada" : "Pendiente"
+        }
+      },
+      {
+        tabla: "incidencias",
+        fila: {
+          id_incidencia: idRespaldo,
+          id_usuario: normalizarTexto(d.IDUsuario),
+          tipo_incidencia: normalizarTexto(d.TipoIncidencia),
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          licencia_medica: valorONull(d.LicenciaMedica),
+          observaciones: valorONull(d.Observaciones),
+          registrado_por: normalizarTexto(d.RegistradoPor || idSesion()),
+          fecha_registro: ahoraISO,
+          estado: "Activa",
+          fecha_oficial_1: fechaONull(d.FechaOficial1),
+          fecha_oficial_2: fechaONull(d.FechaOficial2),
+          fecha_oficial_3: fechaONull(d.FechaOficial3),
+          uso_1_fecha: fechaONull(d.Uso1Fecha),
+          uso_2_fecha: fechaONull(d.Uso2Fecha),
+          uso_3_fecha: fechaONull(d.Uso3Fecha),
+          uso_1_estado: fechaONull(d.Uso1Fecha) ? "Utilizada" : "Pendiente",
+          uso_2_estado: fechaONull(d.Uso2Fecha) ? "Utilizada" : "Pendiente",
+          uso_3_estado: fechaONull(d.Uso3Fecha) ? "Utilizada" : "Pendiente"
+        }
+      }
+    ];
+
+    const errores = [];
+
+    for (const intento of filas) {
+      const { error } = await supabase.from(intento.tabla).insert(intento.fila);
+
+      if (!error) {
+        return {
+          success: true,
+          IDIncidencia: idRespaldo,
+          incidencia: Object.assign({}, intento.fila, { IDIncidencia: idRespaldo })
+        };
+      }
+
+      errores.push(`${intento.tabla}: ${error.message || error}`);
+    }
+
+    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "RPC guardar_incidencia_sec2 no disponible.";
+    throw new Error(`${mensajeRPC} / Fallback directo no pudo insertar: ${errores.join(" | ")}`);
+  }
+
+  async function obtenerDetalleIncidenciaAsync(idIncidencia) {
+    const id = normalizarTexto(idIncidencia);
+
+    if (!id) {
+      throw new Error("ID de incidencia no válido.");
+    }
+
+    try {
+      const respuesta = await rpc("obtener_detalle_incidencia_sec2", {
+        p_id_acceso_sesion: idSesion(),
+        p_id_incidencia: id
+      });
+      return normalizarRespuestaDetalle(respuesta);
+    } catch (errorRPC) {
+      return await obtenerDetalleIncidenciaFallbackDirecto(id, errorRPC);
+    }
+  }
+
+  async function obtenerDetalleIncidenciaFallbackDirecto(idIncidencia, errorRPC) {
+    const supabase = getClient();
+    const intentos = [
+      { tabla: "Incidencias", columna: "IDIncidencia" },
+      { tabla: "incidencias", columna: "id_incidencia" },
+      { tabla: "incidencias", columna: "id" }
+    ];
+
+    const errores = [];
+
+    for (const intento of intentos) {
+      const { data, error } = await supabase
+        .from(intento.tabla)
+        .select("*")
+        .eq(intento.columna, idIncidencia)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          incidencia: normalizarIncidenciaDesdeBD(data),
+          puedeEditar: false,
+          puedeEliminar: false
+        };
+      }
+
+      if (error) errores.push(`${intento.tabla}.${intento.columna}: ${error.message || error}`);
+    }
+
+    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "RPC obtener_detalle_incidencia_sec2 no disponible.";
+    throw new Error(`${mensajeRPC} / Fallback directo no pudo consultar detalle: ${errores.join(" | ")}`);
+  }
+
   return {
     rpc,
     iniciarSesionAsync,
@@ -144,7 +444,9 @@ const SEC2_API = (() => {
     obtenerReporteDiaAsync,
     obtenerReporteSemanalAsync,
     consultarFechasAsync,
-    obtenerEstadisticaMensualAsync
+    obtenerEstadisticaMensualAsync,
+    guardarIncidenciaAsync,
+    obtenerDetalleIncidenciaAsync
   };
 })();
 
@@ -224,11 +526,15 @@ const API = {
   },
 
   obtenerDetalleIncidencia: function(idIncidencia, onSuccess, onFailure) {
-    if (typeof onFailure === "function") onFailure("Detalle de incidencias aún no migrado a Supabase.");
+    SEC2_API.obtenerDetalleIncidenciaAsync(idIncidencia)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
   guardarIncidencia: function(datos, onSuccess, onFailure) {
-    if (typeof onFailure === "function") onFailure("Guardar incidencias aún no migrado a Supabase.");
+    SEC2_API.guardarIncidenciaAsync(datos)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
   guardarUsosPermisoOficial: function(idIncidencia, datos, onSuccess, onFailure) {
