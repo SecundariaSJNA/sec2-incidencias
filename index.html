@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
+    /* SEC2_INDEX_V27_ICONOS_MINIATURA_CORREGIDOS_COMPLETO_20260710 */
     .profile-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -829,6 +830,136 @@
         width: 42px !important;
         height: 42px !important;
       }
+    }
+
+  
+    /* SEC2_FIX_V27_ICONOS_MINIATURA_FIGURA_COLOR
+       Miniaturas: solo figura sólida de color, sin círculo/fondo.
+       Los iconos grandes de selección de tipo conservan su círculo original. */
+    .profile-stat-grid .mini-icon,
+    .stat-small .mini-icon,
+    .sec2-type-bar-icon,
+    .incident-avatar.sec2-type-icon-unified {
+      background: transparent !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      color: inherit;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: visible !important;
+    }
+
+    .profile-stat-grid .mini-icon::before,
+    .stat-small .mini-icon::before,
+    .sec2-type-bar-icon::before,
+    .incident-avatar.sec2-type-icon-unified::before {
+      display: none !important;
+      content: none !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg,
+    .stat-small .mini-icon .icon-svg,
+    .sec2-type-bar-icon .icon-svg,
+    .incident-avatar.sec2-type-icon-unified .icon-svg {
+      width: 100% !important;
+      height: 100% !important;
+      display: block !important;
+      overflow: visible !important;
+      filter: none !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg *,
+    .stat-small .mini-icon .icon-svg *,
+    .sec2-type-bar-icon .icon-svg *,
+    .incident-avatar.sec2-type-icon-unified .icon-svg * {
+      stroke: none !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg [fill],
+    .stat-small .mini-icon .icon-svg [fill],
+    .sec2-type-bar-icon .icon-svg [fill],
+    .incident-avatar.sec2-type-icon-unified .icon-svg [fill] {
+      fill: currentColor !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg [stroke],
+    .stat-small .mini-icon .icon-svg [stroke],
+    .sec2-type-bar-icon .icon-svg [stroke],
+    .incident-avatar.sec2-type-icon-unified .icon-svg [stroke] {
+      stroke: currentColor !important;
+    }
+
+    .profile-stat-grid .mini-icon.solid-purple,
+    .stat-small .mini-icon.solid-purple,
+    .sec2-type-bar-icon.solid-purple,
+    .incident-avatar.sec2-type-icon-unified.solid-purple { color: var(--purple) !important; }
+
+    .profile-stat-grid .mini-icon.solid-blue,
+    .stat-small .mini-icon.solid-blue,
+    .sec2-type-bar-icon.solid-blue,
+    .incident-avatar.sec2-type-icon-unified.solid-blue { color: var(--blue) !important; }
+
+    .profile-stat-grid .mini-icon.solid-green,
+    .stat-small .mini-icon.solid-green,
+    .sec2-type-bar-icon.solid-green,
+    .incident-avatar.sec2-type-icon-unified.solid-green { color: var(--green) !important; }
+
+    .profile-stat-grid .mini-icon.solid-orange,
+    .stat-small .mini-icon.solid-orange,
+    .sec2-type-bar-icon.solid-orange,
+    .incident-avatar.sec2-type-icon-unified.solid-orange { color: var(--orange) !important; }
+
+    .profile-stat-grid .mini-icon.solid-purple-soft,
+    .stat-small .mini-icon.solid-purple-soft,
+    .sec2-type-bar-icon.solid-purple-soft,
+    .incident-avatar.sec2-type-icon-unified.solid-purple-soft { color: var(--purple-soft) !important; }
+
+    .profile-stat-grid .mini-icon.solid-blue-soft,
+    .stat-small .mini-icon.solid-blue-soft,
+    .sec2-type-bar-icon.solid-blue-soft,
+    .incident-avatar.sec2-type-icon-unified.solid-blue-soft { color: var(--blue-soft) !important; }
+
+    .profile-stat-grid .mini-icon.solid-gold,
+    .stat-small .mini-icon.solid-gold,
+    .sec2-type-bar-icon.solid-gold,
+    .incident-avatar.sec2-type-icon-unified.solid-gold { color: var(--gold) !important; }
+
+    .profile-stat-grid .stat-small:first-child .mini-icon {
+      display: none !important;
+    }
+
+    .profile-stat-grid {
+      align-items: stretch !important;
+    }
+
+    .profile-stat-grid .stat-small {
+      height: 112px !important;
+      min-height: 112px !important;
+      justify-content: center !important;
+    }
+
+    .profile-stat-grid .mini-icon {
+      width: 30px !important;
+      height: 30px !important;
+      min-width: 30px !important;
+      min-height: 30px !important;
+      margin: 0 auto 5px !important;
+    }
+
+    .incident-avatar.sec2-type-icon-unified {
+      width: 48px !important;
+      height: 48px !important;
+      min-width: 48px !important;
+      min-height: 48px !important;
+      margin-left: 2px !important;
+    }
+
+    .sec2-type-bar-icon {
+      width: 34px !important;
+      height: 34px !important;
+      min-width: 34px !important;
+      min-height: 34px !important;
     }
 
   </style>
