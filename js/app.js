@@ -362,6 +362,20 @@ function prepararScrollPantallaActivaApp(el) {
 }
 
 function goBack() {
+  // SEC2_FIX_EDITAR_USO_REGRESA_A_DOCENTE_V16_20260710
+  // Al editar fechas de uso de un permiso oficial, Atrás debe volver al resumen del docente,
+  // no al detalle técnico del permiso.
+  if (currentScreen === "editUseScreen") {
+    const personaDestino = selectedDetailPersonID || selectedPersonID || "";
+    if (personaDestino) {
+      detailBackOverride = "";
+      profileMode = false;
+      navigationStack = [];
+      cargarResumenPersona(personaDestino, false);
+      return;
+    }
+  }
+
   if (currentScreen === "detailScreen" && detailBackOverride) {
     const destino = detailBackOverride;
     detailBackOverride = "";
@@ -1642,21 +1656,23 @@ function consultarEstadisticaMensual() {
   status.className = "status-box show";
   status.textContent = "Generando estadística...";
 
-  API.obtenerHistorialPersona(selectedPersonID, "todas", function(historial) {
+  // SEC2_FIX_ESTADISTICA_PERMISO_OFICIAL_SOLO_FECHAS_OFICIALES_V16_20260710
+  // Primero usamos la RPC mensual porque Supabase conoce las tres fechas oficiales reales.
+  // Las fechas de uso NO cuentan para estadística.
+  API.obtenerEstadisticaMensual(selectedPersonID, mes, anio, function(res) {
     status.className = "status-box";
-
-    const estadistica = construirEstadisticaMensualDesdeHistorial(historial, Number(mes), Number(anio));
+    const estadistica = construirEstadisticaMensualDesdeRespuesta(res, Number(mes), Number(anio));
     renderEstadisticaMensualTipoPermiso(estadistica);
-  }, function(errorHistorial) {
-    console.warn("No se pudo reconstruir estadística mensual desde historial. Se usará RPC mensual si responde:", errorHistorial);
+  }, function(errorRpc) {
+    console.warn("No se pudo obtener estadística mensual por RPC. Se reconstruirá desde historial:", errorRpc);
 
-    API.obtenerEstadisticaMensual(selectedPersonID, mes, anio, function(res) {
+    API.obtenerHistorialPersona(selectedPersonID, "todas", function(historial) {
       status.className = "status-box";
-      const estadistica = construirEstadisticaMensualDesdeRespuesta(res, Number(mes), Number(anio));
+      const estadistica = construirEstadisticaMensualDesdeHistorial(historial, Number(mes), Number(anio));
       renderEstadisticaMensualTipoPermiso(estadistica);
-    }, function(error) {
+    }, function(errorHistorial) {
       status.className = "status-box show error";
-      status.textContent = obtenerMensajeError(error);
+      status.textContent = obtenerMensajeError(errorHistorial || errorRpc);
     });
   });
 }
@@ -1671,6 +1687,29 @@ function construirEstadisticaMensualDesdeHistorial(respuesta, mes, anio) {
   let totalDias = 0;
 
   incidencias.forEach(function(incidencia) {
+    const clave = claveTipoIncidencia(incidencia.TipoIncidencia || incidencia.tipo || incidencia.tipo_incidencia || "Especial");
+
+    if (clave === "permisoOficial") {
+      // Para permiso oficial SOLO cuentan las tres fechas oficiales autorizadas.
+      // Las fechas de uso son control interno y nunca se suman a estadística.
+      const fechasOficiales = [
+        incidencia.FechaOficial1 || incidencia.fecha_oficial_1 || incidencia.fechaOficial1,
+        incidencia.FechaOficial2 || incidencia.fecha_oficial_2 || incidencia.fechaOficial2,
+        incidencia.FechaOficial3 || incidencia.fecha_oficial_3 || incidencia.fechaOficial3
+      ].map(parseFechaLocal).filter(Boolean);
+
+      const diasOficialesMes = fechasOficiales.filter(function(fecha) {
+        return fecha >= inicioMes && fecha <= finMes;
+      }).length;
+
+      if (diasOficialesMes > 0 && tipos[clave]) {
+        tipos[clave].incidencias += 1;
+        tipos[clave].dias += diasOficialesMes;
+        totalDias += diasOficialesMes;
+      }
+      return;
+    }
+
     const fechaInicio = parseFechaLocal(incidencia.FechaInicio || incidencia.fecha_inicio || incidencia.fechaInicio);
     const fechaFin = parseFechaLocal(incidencia.FechaFin || incidencia.fecha_fin || incidencia.fechaFin || incidencia.FechaInicio || incidencia.fecha_inicio || incidencia.fechaInicio);
 
@@ -1680,7 +1719,6 @@ function construirEstadisticaMensualDesdeHistorial(respuesta, mes, anio) {
     const desde = fechaInicio < inicioMes ? inicioMes : fechaInicio;
     const hasta = fechaFin > finMes ? finMes : fechaFin;
     const dias = Math.max(1, Math.round((hasta - desde) / 86400000) + 1);
-    const clave = claveTipoIncidencia(incidencia.TipoIncidencia || incidencia.tipo || incidencia.tipo_incidencia || "Especial");
 
     if (tipos[clave]) {
       tipos[clave].incidencias += 1;
@@ -1711,9 +1749,10 @@ function construirEstadisticaMensualDesdeRespuesta(res, mes, anio) {
     const clave = claveTipoIncidencia(tipo);
     if (!tipos[clave]) return;
 
-    const cantidad = numeroEnteroSeguro(item.cantidad ?? item.total ?? item.valor ?? item.dias ?? 0);
+    const cantidad = numeroEnteroSeguro(item.dias ?? item.cantidad ?? item.total ?? item.valor ?? 0);
+    const incidencias = numeroEnteroSeguro(item.incidencias ?? item.registros ?? item.permisos ?? (cantidad > 0 ? 1 : 0));
     tipos[clave].dias += cantidad;
-    if (cantidad > 0) tipos[clave].incidencias += 1;
+    tipos[clave].incidencias += incidencias;
   });
 
   return {
