@@ -27,7 +27,7 @@ const SVG = {
   "permiso-oficial": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><rect x="11" y="13" width="38" height="39" rx="6" fill="none" stroke="currentColor" stroke-width="6"/><path d="M11 25h38M22 8v12M38 8v12" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="m39 46 5 5 11-13" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="20" y="32" width="7" height="7" fill="currentColor"/><rect x="31" y="32" width="7" height="7" fill="currentColor"/></svg>`,
   incapacidad: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6 53 15v15c0 14-8 24-21 28C19 54 11 44 11 30V15L32 6Z" fill="currentColor"/><path d="M28 19h8v10h10v8H36v10h-8V37H18v-8h10V19Z" fill="#fff"/></svg>`,
   "humanitario-sindical": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="24" r="9" fill="currentColor"/><circle cx="17" cy="29" r="7" fill="currentColor"/><circle cx="47" cy="29" r="7" fill="currentColor"/><path d="M18 58c1-13 8-20 14-20s13 7 14 20H18Z" fill="currentColor"/><path d="M4 58c1-10 6-16 12-16 4 0 7 2 9 5-3 3-5 7-6 11H4ZM45 58c-1-4-3-8-6-11 2-3 5-5 9-5 6 0 11 6 12 16H45Z" fill="currentColor"/></svg>`,
-  "humanitario-oficial": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="M24 19 9 34l15 15 8-8 8 8c4 4 10 2 11-4l5-8-15-15-9 7-8-10Z" fill="currentColor"/><path d="m22 36 7-7 14 14" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="m36 31 6-5 8 8-6 8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  "humanitario-oficial": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="currentColor" opacity="0.12"/><path d="M18 35c4-8 9-12 14-12s10 4 14 12" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M15 39c6 7 12 10 17 10s11-3 17-10" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M32 26c-2-4-8-4-10 0-2 4 1 8 10 14 9-6 12-10 10-14-2-4-8-4-10 0Z" fill="currentColor"/></svg>`,
   "comision-sindical": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="m32 6 6 13 14 2-10 10 3 18-13-7-13 7 3-18-10-10 14-2 6-13Z" fill="currentColor"/><circle cx="32" cy="40" r="6" fill="currentColor"/><circle cx="22" cy="43" r="5" fill="currentColor"/><circle cx="42" cy="43" r="5" fill="currentColor"/><path d="M16 58c1-8 7-13 16-13s15 5 16 13H16Z" fill="currentColor"/></svg>`,
   "comision-oficial": `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><rect x="9" y="21" width="46" height="33" rx="5" fill="currentColor"/><path d="M24 21v-7h16v7" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M9 34h46" stroke="#fff" stroke-width="5"/><rect x="28" y="31" width="8" height="8" rx="1" fill="#fff"/></svg>`,
   especial: `<svg class="icon-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="m32 7 8 16 18 3-13 13 3 18-16-9-16 9 3-18L6 26l18-3 8-16Z" fill="currentColor"/></svg>`
@@ -114,6 +114,7 @@ let navigationStack = [];
 let detailBackOverride = "";
 
 window.addEventListener("load", () => {
+  inyectarEstilosEstadisticaMensualSEC2();
   inicializarIconos();
   const llaveAcceso = sessionStorage.getItem("userIDAcceso");
   if (llaveAcceso) {
@@ -123,6 +124,79 @@ window.addEventListener("load", () => {
     showScreen("loginScreen", false);
   }
 });
+
+
+function inyectarEstilosEstadisticaMensualSEC2() {
+  if (document.getElementById("sec2MonthlyTypeChartStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "sec2MonthlyTypeChartStyles";
+  style.textContent = `
+    .sec2-type-chart-wrap {
+      padding: 18px 10px 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .sec2-type-chart {
+      min-width: 680px;
+      min-height: 250px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 16px;
+      align-items: end;
+      padding: 18px 12px 8px;
+      border-left: 2px solid var(--border);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .sec2-type-bar-item {
+      display: grid;
+      grid-template-rows: 24px 160px 28px 44px;
+      align-items: end;
+      justify-items: center;
+      min-width: 78px;
+    }
+
+    .sec2-type-bar-value {
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1;
+    }
+
+    .sec2-type-bar {
+      width: 48px;
+      border-radius: 13px 13px 4px 4px;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
+    }
+
+    .sec2-type-bar-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .sec2-type-bar-icon .icon-svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .sec2-type-bar-label {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.08;
+      font-weight: 900;
+      text-align: center;
+      max-width: 84px;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
 
 function ejecutarLogin() {
   const idAcceso = document.getElementById("loginIDAcceso").value.trim();
@@ -1459,46 +1533,189 @@ function abrirEstadisticaMensual() {
 }
 
 function consultarEstadisticaMensual() {
-  const mes = document.getElementById("statMes").value; const anio = document.getElementById("statAnio").value;
+  const mes = document.getElementById("statMes").value;
+  const anio = document.getElementById("statAnio").value;
   const status = document.getElementById("statMonthStatus");
+
   if (!mes) { alert("Seleccione el mes a analizar."); return; }
   if (!anio || anio < 2020 || anio > 2100) { alert("Introduzca un año válido."); return; }
-  status.className = "status-box show"; status.textContent = "Generando estadística...";
-  
-  API.obtenerEstadisticaMensual(selectedPersonID, mes, anio, res => {
-    status.className = "status-box"; const d = res.datos;
-    const html = `
-      <article class="data-card">
-        <h2 class="data-card-title">${escapeHTML(res.persona.Nombre)} ${escapeHTML(res.persona.Apellidos)}</h2>
-        <p class="data-card-text"><strong>Periodo analizado:</strong> ${formatearFecha(res.fechaInicio)} al ${formatearFecha(res.fechaFin)}</p>
-        <p class="data-card-text"><strong>Total incidencias en días:</strong> ${res.total}</p>
-        <p class="data-card-text"><strong>Incidencia más frecuente:</strong> ${escapeHTML(res.tipoMasFrecuente)}</p>
-        <section class="chart-wrap">
-          <div class="chart-axis-label">Días del mes ${escapeHTML(res.mes)}/${escapeHTML(res.anio)}</div>
-          <div class="chart-area">
-            <div class="chart-y">Días afectados</div>
-            <div class="bars" id="statMonthBars"></div>
-          </div>
-        </section>
-      </article>
-    `;
-    document.getElementById("statMonthResults").innerHTML = html;
-    const barsContainer = document.getElementById("statMonthBars"); barsContainer.innerHTML = "";
-    
-    d.forEach(item => {
-      const h = Math.min(item.cantidad * 22, 210); const meta = iconMeta(item.tipo);
-      const barDiv = document.createElement("div"); barDiv.className = "bar-item";
-      barDiv.innerHTML = `
-        <span class="bar-value">${item.cantidad > 0 ? item.cantidad : ""}</span>
-        <div class="bar solid-${meta.color}" style="height:${h}px;"></div>
-        <div class="bar-label">Día<br>${item.dia}</div>
-      `;
-      barsContainer.appendChild(barDiv);
+
+  status.className = "status-box show";
+  status.textContent = "Generando estadística...";
+
+  API.obtenerHistorialPersona(selectedPersonID, "todas", function(historial) {
+    status.className = "status-box";
+
+    const estadistica = construirEstadisticaMensualDesdeHistorial(historial, Number(mes), Number(anio));
+    renderEstadisticaMensualTipoPermiso(estadistica);
+  }, function(errorHistorial) {
+    console.warn("No se pudo reconstruir estadística mensual desde historial. Se usará RPC mensual si responde:", errorHistorial);
+
+    API.obtenerEstadisticaMensual(selectedPersonID, mes, anio, function(res) {
+      status.className = "status-box";
+      const estadistica = construirEstadisticaMensualDesdeRespuesta(res, Number(mes), Number(anio));
+      renderEstadisticaMensualTipoPermiso(estadistica);
+    }, function(error) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
     });
-    inicializarIconos();
-  }, function(error) {
-    status.className = "status-box show error"; status.textContent = obtenerMensajeError(error);
   });
+}
+
+function construirEstadisticaMensualDesdeHistorial(respuesta, mes, anio) {
+  const persona = respuesta && respuesta.persona ? respuesta.persona : {};
+  const incidencias = Array.isArray(respuesta && respuesta.incidencias) ? respuesta.incidencias : [];
+  const inicioMes = new Date(anio, mes - 1, 1);
+  const finMes = new Date(anio, mes, 0);
+
+  const tipos = crearConteoTiposEstadistica();
+  let totalDias = 0;
+
+  incidencias.forEach(function(incidencia) {
+    const fechaInicio = parseFechaLocal(incidencia.FechaInicio || incidencia.fecha_inicio || incidencia.fechaInicio);
+    const fechaFin = parseFechaLocal(incidencia.FechaFin || incidencia.fecha_fin || incidencia.fechaFin || incidencia.FechaInicio || incidencia.fecha_inicio || incidencia.fechaInicio);
+
+    if (!fechaInicio || !fechaFin) return;
+    if (fechaFin < inicioMes || fechaInicio > finMes) return;
+
+    const desde = fechaInicio < inicioMes ? inicioMes : fechaInicio;
+    const hasta = fechaFin > finMes ? finMes : fechaFin;
+    const dias = Math.max(1, Math.round((hasta - desde) / 86400000) + 1);
+    const clave = claveTipoIncidencia(incidencia.TipoIncidencia || incidencia.tipo || incidencia.tipo_incidencia || "Especial");
+
+    if (tipos[clave]) {
+      tipos[clave].incidencias += 1;
+      tipos[clave].dias += dias;
+      totalDias += dias;
+    }
+  });
+
+  return {
+    persona: persona,
+    mes: mes,
+    anio: anio,
+    fechaInicio: `${anio}-${String(mes).padStart(2, "0")}-01`,
+    fechaFin: `${anio}-${String(mes).padStart(2, "0")}-${String(finMes.getDate()).padStart(2, "0")}`,
+    totalDias: totalDias,
+    tipos: Object.values(tipos)
+  };
+}
+
+function construirEstadisticaMensualDesdeRespuesta(res, mes, anio) {
+  const persona = res && res.persona ? res.persona : {};
+  const finMes = new Date(anio, mes, 0);
+  const tipos = crearConteoTiposEstadistica();
+  const datos = Array.isArray(res && res.datos) ? res.datos : [];
+
+  datos.forEach(function(item) {
+    const tipo = item.tipo || item.TipoIncidencia || item.nombre || item.tipo_incidencia || "";
+    const clave = claveTipoIncidencia(tipo);
+    if (!tipos[clave]) return;
+
+    const cantidad = numeroEnteroSeguro(item.cantidad ?? item.total ?? item.valor ?? item.dias ?? 0);
+    tipos[clave].dias += cantidad;
+    if (cantidad > 0) tipos[clave].incidencias += 1;
+  });
+
+  return {
+    persona: persona,
+    mes: mes,
+    anio: anio,
+    fechaInicio: (res && res.fechaInicio) || `${anio}-${String(mes).padStart(2, "0")}-01`,
+    fechaFin: (res && res.fechaFin) || `${anio}-${String(mes).padStart(2, "0")}-${String(finMes.getDate()).padStart(2, "0")}`,
+    totalDias: Object.values(tipos).reduce(function(sum, item) { return sum + item.dias; }, 0),
+    tipos: Object.values(tipos)
+  };
+}
+
+function crearConteoTiposEstadistica() {
+  return {
+    permisoOficial: { clave: "permisoOficial", nombre: "Permiso oficial", color: "purple", icono: "permiso-oficial", incidencias: 0, dias: 0 },
+    incapacidad: { clave: "incapacidad", nombre: "Incapacidad", color: "blue", icono: "incapacidad", incidencias: 0, dias: 0 },
+    humanitarioSindical: { clave: "humanitarioSindical", nombre: "Humanitario sindical", color: "green", icono: "humanitario-sindical", incidencias: 0, dias: 0 },
+    humanitarioOficial: { clave: "humanitarioOficial", nombre: "Humanitario oficial", color: "orange", icono: "humanitario-oficial", incidencias: 0, dias: 0 },
+    comisionSindical: { clave: "comisionSindical", nombre: "Comisión sindical", color: "purple-soft", icono: "comision-sindical", incidencias: 0, dias: 0 },
+    comisionOficial: { clave: "comisionOficial", nombre: "Comisión oficial", color: "blue-soft", icono: "comision-oficial", incidencias: 0, dias: 0 },
+    especial: { clave: "especial", nombre: "Especial", color: "gold", icono: "especial", incidencias: 0, dias: 0 }
+  };
+}
+
+function claveTipoIncidencia(tipo) {
+  const texto = normalizarTextoComparacion(tipo);
+
+  if (texto.includes("permiso oficial") || texto.includes("permiso personal")) return "permisoOficial";
+  if (texto.includes("incapacidad") || texto.includes("licencia medica")) return "incapacidad";
+  if (texto.includes("humanitario sindical")) return "humanitarioSindical";
+  if (texto.includes("humanitario oficial")) return "humanitarioOficial";
+  if (texto.includes("comision sindical")) return "comisionSindical";
+  if (texto.includes("comision oficial") || texto === "comision") return "comisionOficial";
+  return "especial";
+}
+
+function parseFechaLocal(valor) {
+  if (!valor) return null;
+  const texto = String(valor).slice(0, 10);
+  const partes = texto.split("-");
+
+  if (partes.length === 3) {
+    const y = Number(partes[0]);
+    const m = Number(partes[1]);
+    const d = Number(partes[2]);
+    if (y && m && d) return new Date(y, m - 1, d);
+  }
+
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+}
+
+function renderEstadisticaMensualTipoPermiso(estadistica) {
+  const tiposConDatos = estadistica.tipos.filter(function(item) { return item.dias > 0 || item.incidencias > 0; });
+  const tipoMasUsado = obtenerTipoMasUsadoEstadistica(estadistica.tipos);
+  const maxDias = Math.max(1, ...estadistica.tipos.map(function(item) { return item.dias; }));
+  const nombrePersona = `${escapeHTML(estadistica.persona.Nombre || estadistica.persona.nombre || "")} ${escapeHTML(estadistica.persona.Apellidos || estadistica.persona.apellidos || "")}`.trim() || "Docente";
+
+  const html = `
+    <article class="data-card">
+      <h2 class="data-card-title">${nombrePersona}</h2>
+      <p class="data-card-text"><strong>Periodo analizado:</strong> ${formatearFecha(estadistica.fechaInicio)} al ${formatearFecha(estadistica.fechaFin)}</p>
+      <p class="data-card-text"><strong>Total de días de incidencia:</strong> ${numeroEnteroSeguro(estadistica.totalDias)}</p>
+      <p class="data-card-text"><strong>Tipo de permiso más usado:</strong> ${escapeHTML(tipoMasUsado)}</p>
+      <section class="chart-wrap sec2-type-chart-wrap">
+        <div class="chart-axis-label">RESUMEN POR TIPO DE INCIDENCIA</div>
+        <div class="sec2-type-chart">
+          ${estadistica.tipos.map(function(item) { return barraTipoEstadistica(item, maxDias); }).join("")}
+        </div>
+      </section>
+      ${tiposConDatos.length === 0 ? `<p class="section-subtitle" style="margin-top:12px;">No hay incidencias registradas para este mes.</p>` : ""}
+    </article>
+  `;
+
+  document.getElementById("statMonthResults").innerHTML = html;
+  inicializarIconos();
+}
+
+function barraTipoEstadistica(item, maxDias) {
+  const altura = item.dias > 0 ? Math.max(22, Math.round((item.dias / maxDias) * 150)) : 8;
+
+  return `
+    <article class="sec2-type-bar-item">
+      <div class="sec2-type-bar-value">${item.dias > 0 ? item.dias : ""}</div>
+      <div class="sec2-type-bar solid-${item.color}" style="height:${altura}px;"></div>
+      <div class="sec2-type-bar-icon color-${item.color}" data-icon="${item.icono}"></div>
+      <div class="sec2-type-bar-label">${escapeHTML(item.nombre)}</div>
+    </article>
+  `;
+}
+
+function obtenerTipoMasUsadoEstadistica(tipos) {
+  const ordenados = tipos
+    .filter(function(item) { return item.dias > 0 || item.incidencias > 0; })
+    .sort(function(a, b) {
+      if (b.dias !== a.dias) return b.dias - a.dias;
+      return b.incidencias - a.incidencias;
+    });
+
+  return ordenados.length ? ordenados[0].nombre : "Sin incidencias";
 }
 
 function obtenerMensajeError(err) {
