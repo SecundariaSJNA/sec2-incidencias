@@ -1,3 +1,14 @@
+/* SEC2_APP_V33_PDF_ROL_LIMPIO_20260710 */
+/* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
+/* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
+/* Base: V29 + PDF gráfico por meses centrado cuando hay pocos meses */
+/* Base: V28 + PDF visible en Historial General para Dirección/Prefectura/Correspondencia + fix doc.arc */
+/* Base: V27 + botón Historial en PDF y generación PDF en teléfono */
+/* Base funcional: V26, sin cambios lógicos; ajustes visuales van en index V28 */
+/* Base: V25 + iconos miniatura corregidos */
+/* SEC2_APP_V24_ICONOS_UNIFICADOS_TIPO_INCIDENCIA_20260710 */
+/* SEC2_APP_V17_REGLAS_DIAS_HABILES_USOS_BACK_PERFIL_20260710 */
+/* SEC2_APP_V18_FECHAS_MMM_BACK_PERFIL_ORDEN_DIRECCION_20260710 */
 const TEST_USERS = {
   "Direccion": "D001",
   "Correspondencia": "C001",
@@ -2227,6 +2238,9 @@ function normalizarIncidenciasPDF(incidencias) {
       FechaOficial1: i.FechaOficial1 || i.fecha_oficial_1 || i.fechaOficial1 || "",
       FechaOficial2: i.FechaOficial2 || i.fecha_oficial_2 || i.fechaOficial2 || "",
       FechaOficial3: i.FechaOficial3 || i.fecha_oficial_3 || i.fechaOficial3 || "",
+      Uso1Fecha: i.Uso1Fecha || i.uso_1_fecha || i.uso1_fecha || i.uso1Fecha || "",
+      Uso2Fecha: i.Uso2Fecha || i.uso_2_fecha || i.uso2_fecha || i.uso2Fecha || "",
+      Uso3Fecha: i.Uso3Fecha || i.uso_3_fecha || i.uso3_fecha || i.uso3Fecha || "",
       Observaciones: i.Observaciones || i.observaciones || "",
       Estado: i.Estado || i.estado || "Activa"
     };
@@ -2237,7 +2251,7 @@ function normalizarIncidenciasPDF(incidencias) {
 
 function calcularMetricasPDF(incidencias) {
   const tipos = crearConteoTiposEstadisticaPDF();
-  const meses = {};
+  const meses = crearRangoMesesGraficaPDF(new Date(), 4, 4);
   let totalDias = 0;
 
   incidencias.forEach(function(i) {
@@ -2246,11 +2260,11 @@ function calcularMetricasPDF(incidencias) {
     if (tipos[clave]) tipos[clave].conteo += 1;
     totalDias += dias;
 
-    const fechaMes = parseFechaLocalPDF(i.FechaInicio);
-    if (fechaMes) {
-      const key = `${fechaMes.getFullYear()}-${String(fechaMes.getMonth() + 1).padStart(2, "0")}`;
-      meses[key] = (meses[key] || 0) + 1;
-    }
+    obtenerFechasRealesIncidenciaPDF(i).forEach(function(fecha) {
+      if (!fecha || !esDiaHabilPDF(fecha)) return;
+      const key = keyMesPDF(fecha);
+      if (Object.prototype.hasOwnProperty.call(meses, key)) meses[key] += 1;
+    });
   });
 
   return {
@@ -2274,18 +2288,44 @@ function crearConteoTiposEstadisticaPDF() {
 }
 
 function calcularDiasIncidenciaPDF(incidencia) {
+  return obtenerFechasRealesIncidenciaPDF(incidencia).filter(esDiaHabilPDF).length;
+}
+
+function obtenerFechasRealesIncidenciaPDF(incidencia) {
   const clave = claveTipoIncidencia(incidencia.TipoIncidencia || "");
+
   if (clave === "permisoOficial") {
-    const fechas = [incidencia.FechaOficial1, incidencia.FechaOficial2, incidencia.FechaOficial3]
+    return [incidencia.Uso1Fecha, incidencia.Uso2Fecha, incidencia.Uso3Fecha]
       .map(parseFechaLocalPDF)
-      .filter(Boolean)
-      .filter(esDiaHabilPDF);
-    return fechas.length;
+      .filter(Boolean);
   }
 
   const inicio = parseFechaLocalPDF(incidencia.FechaInicio);
   const fin = parseFechaLocalPDF(incidencia.FechaFin || incidencia.FechaInicio);
-  return contarDiasHabilesPDF(inicio, fin);
+  if (!inicio || !fin || fin < inicio) return [];
+
+  const fechas = [];
+  const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  const limite = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  while (cursor <= limite) {
+    fechas.push(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return fechas;
+}
+
+function keyMesPDF(fecha) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function crearRangoMesesGraficaPDF(fechaReferencia, mesesAntes, mesesDespues) {
+  const base = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth(), 1);
+  const salida = {};
+  for (let offset = -mesesAntes; offset <= mesesDespues; offset += 1) {
+    const f = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+    salida[keyMesPDF(f)] = 0;
+  }
+  return salida;
 }
 
 function obtenerPeriodoPDF(incidencias) {
@@ -2337,6 +2377,34 @@ function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   doc.text(`${periodo.inicio} al ${periodo.fin}`, w - 24, 70, { align: "right" });
 }
 
+
+function obtenerRolVisiblePDF(persona) {
+  const raw = limpiarTextoPDF(
+    persona.Rol ||
+    persona.rol ||
+    persona.rol_nombre ||
+    persona.RolNombre ||
+    persona.puesto ||
+    persona.Puesto ||
+    ""
+  ).toLowerCase();
+
+  if (raw.includes("direc")) return "Directivo";
+  if (raw.includes("corres")) return "Correspondencia";
+  if (raw.includes("prefec")) return "Prefectura";
+  if (raw.includes("docen") || !raw) return "Docente";
+
+  const limpio = raw
+    .replace(/\brol\b/g, "")
+    .replace(/\bcargo\b/g, "")
+    .replace(/\bpuesto\b/g, "")
+    .replace(/[/:]/g, " ")
+    .trim();
+
+  return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : "Docente";
+}
+
+
 function dibujarTarjetaDocentePDF(doc, persona, y) {
   const w = doc.internal.pageSize.getWidth();
   const x = 20;
@@ -2357,14 +2425,9 @@ function dibujarTarjetaDocentePDF(doc, persona, y) {
   doc.text("Turno:", x + 84, y + 45);
   doc.setFont("helvetica", "normal");
   doc.text(TURNOS_TEXTO[persona.Turno] || persona.TurnoNombre || persona.turno_nombre || "Sin dato", x + 124, y + 45);
-  doc.setFont("helvetica", "bold");
-  doc.text("Puesto / Rol:", x + 184, y + 45);
   doc.setFont("helvetica", "normal");
-  doc.text("Docente", x + 240, y + 45);
-  doc.setFont("helvetica", "bold");
-  doc.text("ID de Acceso:", x + 84, y + 61);
-  doc.setFont("helvetica", "normal");
-  doc.text(persona.IDAcceso || persona.id_acceso || "", x + 145, y + 61);
+  doc.text(obtenerRolVisiblePDF(persona), x + 184, y + 45);
+  /* Por seguridad visual del reporte, el ID de Acceso no se imprime en PDF. */
   return y + 72;
 }
 
@@ -2458,63 +2521,72 @@ function dibujarResumenTotalPDF(doc, metricas, y) {
 
 function dibujarGraficoMesesPDF(doc, meses, y) {
   const w = doc.internal.pageSize.getWidth();
-  const x = 54;
-  const ancho = w - 108;
-  const alto = 116;
-  const entries = Object.keys(meses).sort().map(function(k) { return { key: k, valor: meses[k] }; });
-  if (!entries.length) entries.push({ key: "Sin", valor: 0 });
-
-  const max = Math.max(1, ...entries.map(function(e) { return e.valor; }));
+  const x = 56;
+  const ancho = w - 112;
+  const alto = 122;
+  const baseY = y + alto;
+  const topY = y + 18;
+  const entries = Object.keys(meses).sort().map(function(k) { return { key: k, valor: meses[k] || 0 }; });
+  const maxReal = Math.max(0, ...entries.map(function(e) { return e.valor; }));
+  const paso = Math.max(1, Math.ceil(Math.max(1, maxReal) / 4));
+  const maxEscala = paso * 4;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.6);
   doc.setTextColor(5, 31, 89);
-  doc.text("RESUMEN POR MESES (número de incidencias)", w / 2, y, { align: "center" });
+  doc.text("RESUMEN POR MESES (días reales de incidencia)", w / 2, y, { align: "center" });
 
-  doc.setDrawColor(220, 225, 232);
-  doc.setLineWidth(0.7);
-  doc.line(x, y + alto, x + ancho, y + alto);
-  doc.line(x, y + 16, x, y + alto);
+  doc.setDrawColor(204, 213, 226);
+  doc.setLineWidth(1.8);
+  doc.line(x, baseY, x + ancho, baseY);
+  doc.line(x, topY, x, baseY);
 
-  const colores = [[109,40,217], [21,154,52], [11,99,229], [255,90,31], [21,154,52], [255,90,31], [109,40,217], [220,38,38]];
-  const n = entries.length;
-
-  /*
-    Importante: si solo existe 1 mes, no se pega la barra a la izquierda.
-    Se centra el grupo para evitar el hueco visual enorme que se veía en iPhone.
-  */
-  let bw;
-  let gap;
-  if (n <= 1) {
-    bw = 54;
-    gap = 0;
-  } else if (n <= 3) {
-    bw = 44;
-    gap = 62;
-  } else {
-    gap = Math.min(24, ancho / n * 0.30);
-    bw = Math.max(14, Math.min(32, (ancho - gap * (n - 1)) / n));
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.4);
+  doc.setTextColor(75, 85, 99);
+  for (let v = 0; v <= maxEscala; v += paso) {
+    const ty = baseY - ((v / maxEscala) * (baseY - topY));
+    doc.setDrawColor(232, 236, 244);
+    doc.setLineWidth(0.45);
+    if (v > 0) doc.line(x, ty, x + ancho, ty);
+    doc.setTextColor(75, 85, 99);
+    doc.text(String(v), x - 8, ty + 2, { align: "right" });
   }
 
+  const colores = [[109,40,217], [21,154,52], [11,99,229], [255,90,31], [21,154,52], [255,90,31], [109,40,217], [220,38,38], [191,140,36]];
+  const n = Math.max(1, entries.length);
+  const gap = 13;
+  const bw = Math.max(20, Math.min(34, (ancho - gap * (n - 1)) / n));
   const grupoAncho = n * bw + Math.max(0, n - 1) * gap;
   const startX = x + (ancho - grupoAncho) / 2;
+  const altoGrafica = baseY - topY;
 
   entries.forEach(function(e, idx) {
     const bx = startX + idx * (bw + gap);
-    const bh = e.valor > 0 ? Math.max(10, (e.valor / max) * 76) : 2;
     const c = colores[idx % colores.length];
-    doc.setFillColor(c[0], c[1], c[2]);
-    doc.roundedRect(bx, y + alto - bh, bw, bh, 2, 2, "F");
+    const bh = e.valor > 0 ? Math.max(14, (e.valor / maxEscala) * altoGrafica) : 0;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(5, 31, 89);
-    if (e.valor > 0) doc.text(String(e.valor), bx + bw / 2, y + alto - bh - 5, { align: "center" });
+    if (bh > 0) {
+      doc.setFillColor(c[0], c[1], c[2]);
+      doc.roundedRect(bx, baseY - bh, bw, bh, 2.2, 2.2, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.4);
+      if (bh >= 18) {
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(e.valor), bx + bw / 2, baseY - bh + 12, { align: "center" });
+      } else {
+        doc.setTextColor(5, 31, 89);
+        doc.text(String(e.valor), bx + bw / 2, baseY - bh - 5, { align: "center" });
+      }
+    }
 
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.7);
+    doc.setTextColor(5, 31, 89);
     const etiqueta = etiquetaMesPDF(e.key);
-    doc.text(etiqueta[0], bx + bw / 2, y + alto + 12, { align: "center" });
-    if (etiqueta[1]) doc.text(etiqueta[1], bx + bw / 2, y + alto + 22, { align: "center" });
+    doc.text(etiqueta[0], bx + bw / 2, baseY + 12, { align: "center" });
+    if (etiqueta[1]) doc.text(etiqueta[1], bx + bw / 2, baseY + 22, { align: "center" });
   });
 }
 
@@ -2737,4 +2809,3 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
-
