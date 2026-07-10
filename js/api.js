@@ -408,53 +408,59 @@ const SEC2_API = (() => {
     validarDatosIncidencia(datos);
 
     /*
-      SEC2_FIX_SCHEMA_REAL_INCIDENCIAS_V7_20260709
-      Esquema confirmado en Supabase:
-      incidencias.id uuid, folio text, usuario_id uuid, tipo_incidencia_id uuid,
-      estado_id uuid, fecha_inicio date, fecha_fin date, licencia_medica text,
-      observaciones text, registrado_por_id uuid, fecha_registro timestamptz.
+      SEC2_FIX_RPC_SECURITY_DEFINER_V8_20260709
+      El navegador no debe consultar directamente public.usuarios porque RLS/permisos
+      bloquean la tabla. El guardado se delega a la RPC guardar_incidencia_sec2,
+      creada en Supabase con SECURITY DEFINER.
     */
-    const supabase = getClient();
     const d = datos || {};
     const oficial = esPermisoOficial(d);
     const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
     const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
-    const folio = generarIDIncidenciaTemporal();
 
-    const usuario = await buscarUsuarioPorIDAcceso(d.IDUsuario, "docente afectado");
-    const registrador = await buscarUsuarioPorIDAcceso(d.RegistradoPor || idSesion(), "usuario registrador");
-    const tipo = await buscarTipoIncidencia(d.TipoIncidencia);
-    const estado = await buscarEstadoIncidenciaActivo();
+    const respuesta = await rpc("guardar_incidencia_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_acceso_persona: normalizarTexto(d.IDUsuario),
+      p_tipo_incidencia: normalizarTexto(d.TipoIncidencia),
+      p_fecha_inicio: fechaInicio,
+      p_fecha_fin: fechaFin,
+      p_licencia_medica: valorONull(d.LicenciaMedica),
+      p_observaciones: valorONull(d.Observaciones),
+      p_registrado_por: normalizarTexto(d.RegistradoPor || idSesion()),
+      p_id_incidencia_respaldo: generarIDIncidenciaTemporal(),
+      p_fecha_oficial_1: fechaONull(d.FechaOficial1),
+      p_fecha_oficial_2: fechaONull(d.FechaOficial2),
+      p_fecha_oficial_3: fechaONull(d.FechaOficial3),
+      p_uso_1_fecha: fechaONull(d.Uso1Fecha),
+      p_uso_2_fecha: fechaONull(d.Uso2Fecha),
+      p_uso_3_fecha: fechaONull(d.Uso3Fecha)
+    });
 
-    const fila = {
-      folio: folio,
-      usuario_id: usuario.id,
-      tipo_incidencia_id: tipo.id,
-      estado_id: estado.id,
-      fecha_inicio: fechaInicio,
-      fecha_fin: fechaFin,
-      licencia_medica: valorONull(d.LicenciaMedica),
-      observaciones: valorONull(d.Observaciones),
-      registrado_por_id: registrador.id,
-      fecha_registro: new Date().toISOString()
-    };
+    const r = Array.isArray(respuesta) ? respuesta[0] : respuesta;
 
-    const { data, error } = await supabase
-      .from("incidencias")
-      .insert(fila)
-      .select("*, usuarios:usuario_id(*), tipos_incidencia:tipo_incidencia_id(*), estados_incidencia:estado_id(*), registrador:registrado_por_id(*)")
-      .single();
-
-    if (error) {
-      throw new Error(`Guardado directo SEC2 V7 falló en public.incidencias: ${error.message || error}`);
+    if (!r) {
+      throw new Error("Supabase no devolvió respuesta al guardar la incidencia.");
     }
 
-    const normalizada = normalizarIncidenciaDesdeBD(data || fila);
+    if (r.success === false) {
+      throw new Error(r.error || "No fue posible guardar la incidencia.");
+    }
+
+    const idGuardado = r.IDIncidencia || r.idIncidencia || r.id_incidencia || r.id || r.folio;
 
     return {
       success: true,
-      IDIncidencia: normalizada.IDIncidencia || (data && data.id) || folio,
-      incidencia: Object.assign({}, normalizada, { IDIncidencia: normalizada.IDIncidencia || (data && data.id) || folio })
+      IDIncidencia: idGuardado,
+      incidencia: {
+        IDIncidencia: idGuardado,
+        IDUsuario: normalizarTexto(d.IDUsuario),
+        TipoIncidencia: normalizarTexto(d.TipoIncidencia),
+        FechaInicio: fechaInicio,
+        FechaFin: fechaFin,
+        LicenciaMedica: valorONull(d.LicenciaMedica) || "",
+        Observaciones: valorONull(d.Observaciones) || "",
+        RegistradoPor: normalizarTexto(d.RegistradoPor || idSesion())
+      }
     };
   }
 
