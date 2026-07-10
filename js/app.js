@@ -1599,7 +1599,12 @@ function cargarReporteDia() {
   API.obtenerReporteDia(respuesta => {
     document.getElementById("dataSubtitle").textContent = "Personal activo o con incidencias el " + formatearFecha(respuesta.fecha);
     document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(respuesta);
-    renderListaIncidencias(respuesta.incidencias);
+    renderListaReportePorDia(respuesta.incidencias, {
+      fechaUnica: respuesta.fecha,
+      titulo: "Personal con incidencia",
+      subtitulo: "Docentes ausentes o con permiso.",
+      vacio: "Todo el personal se encuentra sin incidencias registradas en esta fecha."
+    });
   }, renderError);
 }
 
@@ -1637,6 +1642,128 @@ function renderListaIncidencias(incidencias) {
   inicializarIconos();
 }
 
+// SEC2_FIX_REPORTES_SIN_DETALLE_SEPARADORES_5_HABILES_V19_20260710
+function renderListaReportePorDia(incidencias, opciones = {}) {
+  const container = document.getElementById("dataList");
+  container.innerHTML = "";
+
+  const lista = Array.isArray(incidencias) ? incidencias : [];
+  const fechasBase = Array.isArray(opciones.fechas) ? opciones.fechas : [];
+  const fechas = normalizarFechasReporte(lista, fechasBase, opciones.fechaUnica);
+
+  if (lista.length === 0) {
+    container.innerHTML = `
+      <h2 class="section-title">${escapeHTML(opciones.titulo || "Personal con incidencia")}</h2>
+      ${opciones.fechaUnica ? crearSeparadorFechaReporte(opciones.fechaUnica) : ""}
+      ${crearTarjetaSimple("Sin incidencias", opciones.vacio || "No hay incidencias para mostrar.")}
+    `;
+    inicializarIconos();
+    return;
+  }
+
+  container.innerHTML = `
+    <h2 class="section-title">${escapeHTML(opciones.titulo || "Personal con incidencia")}</h2>
+    <p class="section-subtitle">${escapeHTML(opciones.subtitulo || "Docentes ausentes o con permiso.")}</p>
+  `;
+
+  fechas.forEach(function(fecha) {
+    container.insertAdjacentHTML("beforeend", crearSeparadorFechaReporte(fecha));
+    const delDia = lista.filter(function(inc) {
+      return obtenerFechaReporteIncidencia(inc) === normalizarFechaISO(fecha);
+    });
+
+    if (delDia.length === 0) {
+      container.insertAdjacentHTML("beforeend", crearTarjetaSimple("Sin incidencias", "No hay personal ausente o con permiso en este día."));
+      return;
+    }
+
+    delDia.forEach(function(incidencia) {
+      // En reportes operativos no se muestra Ver detalle para ningún rol.
+      container.appendChild(crearCardIncidencia(incidencia, false));
+    });
+  });
+
+  inicializarIconos();
+}
+
+function normalizarFechasReporte(incidencias, fechasBase, fechaUnica) {
+  const set = new Set();
+
+  if (fechaUnica) set.add(normalizarFechaISO(fechaUnica));
+  fechasBase.forEach(function(fecha) {
+    const f = normalizarFechaISO(fecha);
+    if (f) set.add(f);
+  });
+
+  incidencias.forEach(function(inc) {
+    const f = obtenerFechaReporteIncidencia(inc);
+    if (f) set.add(f);
+  });
+
+  return Array.from(set).filter(Boolean).sort();
+}
+
+function obtenerFechaReporteIncidencia(incidencia) {
+  return normalizarFechaISO(
+    incidencia.FechaReporte ||
+    incidencia.fechaReporte ||
+    incidencia.fecha_reporte ||
+    incidencia.DiaReporte ||
+    incidencia.diaReporte ||
+    incidencia.dia_reporte ||
+    incidencia.FechaInicio ||
+    incidencia.fecha_inicio ||
+    incidencia.fechaInicio
+  );
+}
+
+function normalizarFechaISO(fecha) {
+  if (!fecha) return "";
+  const texto = String(fecha);
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) return texto.slice(0, 10);
+  const partes = texto.slice(0, 10).split("/");
+  if (partes.length === 3 && partes[2].length === 4) {
+    return `${partes[2]}-${partes[1].padStart(2, "0")}-${partes[0].padStart(2, "0")}`;
+  }
+  return texto.slice(0, 10);
+}
+
+// SEC2_FIX_REPORTES_BANNER_FECHA_FINOS_V20_20260710
+function crearSeparadorFechaReporte(fechaISO) {
+  const partes = obtenerPartesSeparadorFechaReporte(fechaISO);
+
+  return `
+    <div class="report-day-separator">
+      <span class="report-day-name">${escapeHTML(partes.dia)}</span>
+      <span class="report-day-divider" aria-hidden="true">|</span>
+      <span class="report-day-date">${escapeHTML(partes.fecha)}</span>
+    </div>
+  `;
+}
+
+function obtenerPartesSeparadorFechaReporte(fechaISO) {
+  const iso = normalizarFechaISO(fechaISO);
+  const partes = iso.split("-");
+
+  if (partes.length !== 3) {
+    return { dia: "Fecha", fecha: formatearFecha(fechaISO).replace(/\/\d{4}$/, "") };
+  }
+
+  const fecha = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+  const dias = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+  return {
+    dia: dias[fecha.getDay()],
+    fecha: `${Number(partes[2])} de ${meses[fecha.getMonth()]}`
+  };
+}
+
+function formatearFechaReporteLarga(fechaISO) {
+  const partes = obtenerPartesSeparadorFechaReporte(fechaISO);
+  return `${partes.dia} | ${partes.fecha}`;
+}
+
 function cargarReporteSemanal() {
   document.getElementById("dataTitle").textContent = "Reporte semanal";
   document.getElementById("dataSubtitle").textContent = "Cargando reporte semanal...";
@@ -1646,9 +1773,14 @@ function cargarReporteSemanal() {
   document.getElementById("dataBrandIcon").setAttribute("data-icon", "calendar"); showScreen("dataScreen");
   
   API.obtenerReporteSemanal(r => {
-    document.getElementById("dataSubtitle").textContent = `Del ${formatearFecha(r.fechaInicio)} al ${formatearFecha(r.fechaFin)}`;
+    document.getElementById("dataSubtitle").textContent = `Cinco días hábiles: ${formatearFecha(r.fechaInicio)} al ${formatearFecha(r.fechaFin)}`;
     document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(r);
-    renderListaIncidencias(r.incidencias);
+    renderListaReportePorDia(r.incidencias, {
+      fechas: r.diasHabiles || r.fechas || [],
+      titulo: "Personal con incidencia",
+      subtitulo: "Docentes ausentes o con permiso.",
+      vacio: "No hay incidencias programadas en los cinco días hábiles del reporte."
+    });
   }, renderError);
 }
 
