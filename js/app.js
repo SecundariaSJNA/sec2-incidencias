@@ -1,4 +1,5 @@
-/* SEC2_APP_V27_ICONOS_MINIATURA_FINAL_OK_20260710 */
+/* SEC2_APP_V28_HISTORIAL_PDF_COMPLETO_20260710 */
+/* Base: V27 + botón Historial en PDF y generación PDF en teléfono */
 /* Base funcional: V26, sin cambios lógicos; ajustes visuales van en index V28 */
 /* Base: V25 + iconos miniatura corregidos */
 /* SEC2_APP_V24_ICONOS_UNIFICADOS_TIPO_INCIDENCIA_20260710 */
@@ -695,6 +696,7 @@ function renderResumenPersona(respuesta) {
       ${optionCard("Historial completo", descripcionHistorial, "green", "history", "cargarHistorialPersona('todas')")}
       ${optionCard("Próximas incidencias", "Consultar incidencias futuras programadas.", "blue", "calendar", "cargarHistorialPersona('proximas')")}
       ${optionCard("Estadística mensual", "Consultar gráfica mensual por tipo de incidencia.", "orange", "report", "abrirEstadisticaMensual()")}
+      ${debeMostrarBotonPDFHistorial() ? optionCard("Historial en PDF", "Generar reporte descargable del historial.", "blue", "report", "generarHistorialPDFDocente()") : ""}
     </article>
     <section class="info-card">
       <div class="info-icon">i</div>
@@ -2079,6 +2081,632 @@ function obtenerTipoMasUsadoEstadistica(tipos) {
   return ordenados.length ? ordenados[0].nombre : "Sin incidencias";
 }
 
+
+/* =========================================================
+   SEC2 PDF — Historial del docente
+   Generación local en navegador móvil con jsPDF + autoTable.
+   Modelo visual basado en reporte maestro SEC2.
+   ========================================================= */
+
+const SEC2_PDF_LOGO_URL = "https://raw.githubusercontent.com/SecSJNA/sec2-app/d810700d427ea454662ff6e4836c4d6431cb8115/logoPng.png";
+const SEC2_PDF_ESCUELA = "ESCUELA SECUNDARIA GENERAL No. 2\n“SUPREMA JUNTA NACIONAL AMERICANA”";
+const SEC2_PDF_LEMA = "Formación académica integral, comunitaria y humanista";
+
+function debeMostrarBotonPDFHistorial() {
+  const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
+  return !profileMode && (rol === "Direccion" || rol === "Correspondencia");
+}
+
+async function generarHistorialPDFDocente() {
+  if (!selectedPersonID) {
+    alert("Primero selecciona un docente.");
+    return;
+  }
+
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("No se cargó la librería PDF. Revisa conexión o recarga la página.");
+    return;
+  }
+
+  const botonTemporal = document.activeElement;
+  const textoOriginal = botonTemporal && botonTemporal.textContent ? botonTemporal.textContent : "";
+  try {
+    if (botonTemporal && botonTemporal.tagName === "BUTTON") botonTemporal.textContent = "GENERANDO PDF...";
+
+    const respuesta = await obtenerHistorialPersonaPromesaPDF(selectedPersonID);
+    await construirYMostrarPDFHistorialDocente(respuesta || {});
+  } catch (error) {
+    console.error("Error generando PDF SEC2:", error);
+    alert("No fue posible generar el PDF: " + obtenerMensajeError(error));
+  } finally {
+    if (botonTemporal && botonTemporal.tagName === "BUTTON" && textoOriginal) botonTemporal.textContent = textoOriginal;
+  }
+}
+
+function obtenerHistorialPersonaPromesaPDF(idPersona) {
+  return new Promise(function(resolve, reject) {
+    API.obtenerHistorialPersona(idPersona, "todas", resolve, reject);
+  });
+}
+
+async function construirYMostrarPDFHistorialDocente(respuesta) {
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+
+  const persona = respuesta.persona || {};
+  const incidencias = normalizarIncidenciasPDF(respuesta.incidencias || []);
+  const logoData = await cargarImagenPDF(SEC2_PDF_LOGO_URL);
+  const metricas = calcularMetricasPDF(incidencias);
+  const periodo = obtenerPeriodoPDF(incidencias);
+
+  dibujarEncabezadoPDF(doc, logoData, persona, periodo);
+  let y = 118;
+
+  y = dibujarTarjetaDocentePDF(doc, persona, y);
+  y = dibujarEstadisticasRapidasPDF(doc, metricas, y + 20);
+  y = dibujarTituloSeccionPDF(doc, "HISTORIAL COMPLETO DE INCIDENCIAS", "orden cronológico: más reciente al más antiguo", y + 18);
+
+  const filasTabla = incidencias.map(function(incidencia, idx) {
+    const dias = calcularDiasIncidenciaPDF(incidencia);
+    return [
+      String(idx + 1),
+      incidencia.TipoIncidencia || "Especial",
+      formatearFechaPDF(incidencia.FechaInicio),
+      formatearFechaPDF(incidencia.FechaFin),
+      String(dias),
+      limpiarTextoPDF(incidencia.Observaciones || ""),
+      limpiarTextoPDF(incidencia.Estado || "Activa")
+    ];
+  });
+
+  if (filasTabla.length === 0) {
+    filasTabla.push(["-", "Sin incidencias", "-", "-", "0", "Sin registros en el periodo.", "-"]);
+  }
+
+  doc.autoTable({
+    startY: y,
+    head: [["No.", "TIPO DE INCIDENCIA", "FECHA INICIO", "FECHA FIN", "DÍAS", "OBSERVACIONES", "ESTADO"]],
+    body: filasTabla,
+    theme: "grid",
+    margin: { left: 20, right: 20, top: 112, bottom: 46 },
+    styles: {
+      font: "helvetica",
+      fontSize: 7.6,
+      cellPadding: { top: 5, right: 4, bottom: 5, left: 4 },
+      valign: "middle",
+      textColor: [10, 28, 64],
+      lineColor: [218, 226, 238],
+      lineWidth: 0.55
+    },
+    headStyles: {
+      fillColor: [5, 31, 89],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      halign: "center"
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 28 },
+      1: { cellWidth: 142, cellPadding: { left: 18, right: 4, top: 5, bottom: 5 } },
+      2: { halign: "center", cellWidth: 75 },
+      3: { halign: "center", cellWidth: 75 },
+      4: { halign: "center", cellWidth: 38 },
+      5: { cellWidth: 132 },
+      6: { halign: "center", cellWidth: 62 }
+    },
+    didDrawPage: function() {
+      dibujarEncabezadoPDF(doc, logoData, persona, periodo);
+    },
+    didDrawCell: function(data) {
+      if (data.section === "body" && data.column.index === 1) {
+        const tipo = filasTabla[data.row.index] ? filasTabla[data.row.index][1] : "";
+        const meta = obtenerMetaPDF(tipo);
+        dibujarIconoTipoPDF(doc, meta.clave, meta.color, data.cell.x + 6, data.cell.y + data.cell.height / 2 - 4.5, 9);
+      }
+    }
+  });
+
+  y = doc.lastAutoTable.finalY + 14;
+  y = asegurarEspacioPDF(doc, y, 160, logoData, persona, periodo);
+  y = dibujarResumenTotalPDF(doc, metricas, y);
+  y = asegurarEspacioPDF(doc, y + 18, 190, logoData, persona, periodo);
+  dibujarGraficoMesesPDF(doc, metricas.meses, y + 10);
+
+  agregarPieYPaginacionPDF(doc);
+
+  const nombreArchivo = crearNombreArchivoPDF(persona);
+  abrirPDFEnTelefono(doc, nombreArchivo);
+}
+
+function normalizarIncidenciasPDF(incidencias) {
+  if (!Array.isArray(incidencias)) return [];
+  return incidencias.map(function(i) {
+    return {
+      IDIncidencia: i.IDIncidencia || i.id || i.id_incidencia || "",
+      Folio: i.Folio || i.folio || "",
+      TipoIncidencia: i.TipoIncidencia || i.tipo || i.tipo_incidencia || "Especial",
+      FechaInicio: i.FechaInicio || i.fecha_inicio || i.fechaInicio || "",
+      FechaFin: i.FechaFin || i.fecha_fin || i.fechaFin || i.FechaInicio || i.fecha_inicio || "",
+      FechaOficial1: i.FechaOficial1 || i.fecha_oficial_1 || i.fechaOficial1 || "",
+      FechaOficial2: i.FechaOficial2 || i.fecha_oficial_2 || i.fechaOficial2 || "",
+      FechaOficial3: i.FechaOficial3 || i.fecha_oficial_3 || i.fechaOficial3 || "",
+      Observaciones: i.Observaciones || i.observaciones || "",
+      Estado: i.Estado || i.estado || "Activa"
+    };
+  }).sort(function(a, b) {
+    return String(b.FechaInicio || "").localeCompare(String(a.FechaInicio || ""));
+  });
+}
+
+function calcularMetricasPDF(incidencias) {
+  const tipos = crearConteoTiposEstadisticaPDF();
+  const meses = {};
+  let totalDias = 0;
+
+  incidencias.forEach(function(i) {
+    const clave = claveTipoIncidencia(i.TipoIncidencia);
+    const dias = calcularDiasIncidenciaPDF(i);
+    if (tipos[clave]) tipos[clave].conteo += 1;
+    totalDias += dias;
+
+    const fechaMes = parseFechaLocalPDF(i.FechaInicio);
+    if (fechaMes) {
+      const key = `${fechaMes.getFullYear()}-${String(fechaMes.getMonth() + 1).padStart(2, "0")}`;
+      meses[key] = (meses[key] || 0) + 1;
+    }
+  });
+
+  return {
+    totalIncidencias: incidencias.length,
+    totalDias: totalDias,
+    tipos: tipos,
+    meses: meses
+  };
+}
+
+function crearConteoTiposEstadisticaPDF() {
+  return {
+    permisoOficial: { nombre: "Permiso oficial", color: [109, 40, 217], conteo: 0, icono: "permisoOficial" },
+    incapacidad: { nombre: "Incapacidad", color: [11, 99, 229], conteo: 0, icono: "incapacidad" },
+    humanitarioSindical: { nombre: "Humanitario sindical", color: [21, 154, 52], conteo: 0, icono: "humanitarioSindical" },
+    humanitarioOficial: { nombre: "Humanitario oficial", color: [255, 90, 31], conteo: 0, icono: "humanitarioOficial" },
+    comisionSindical: { nombre: "Comisión sindical", color: [139, 73, 223], conteo: 0, icono: "comisionSindical" },
+    comisionOficial: { nombre: "Comisión oficial", color: [47, 128, 237], conteo: 0, icono: "comisionOficial" },
+    especial: { nombre: "Especial", color: [191, 140, 36], conteo: 0, icono: "especial" }
+  };
+}
+
+function calcularDiasIncidenciaPDF(incidencia) {
+  const clave = claveTipoIncidencia(incidencia.TipoIncidencia || "");
+  if (clave === "permisoOficial") {
+    const fechas = [incidencia.FechaOficial1, incidencia.FechaOficial2, incidencia.FechaOficial3]
+      .map(parseFechaLocalPDF)
+      .filter(Boolean)
+      .filter(esDiaHabilPDF);
+    return fechas.length;
+  }
+
+  const inicio = parseFechaLocalPDF(incidencia.FechaInicio);
+  const fin = parseFechaLocalPDF(incidencia.FechaFin || incidencia.FechaInicio);
+  return contarDiasHabilesPDF(inicio, fin);
+}
+
+function obtenerPeriodoPDF(incidencias) {
+  const fechas = [];
+  incidencias.forEach(function(i) {
+    const a = parseFechaLocalPDF(i.FechaInicio);
+    const b = parseFechaLocalPDF(i.FechaFin || i.FechaInicio);
+    if (a) fechas.push(a);
+    if (b) fechas.push(b);
+  });
+  if (!fechas.length) return { inicio: "Sin registros", fin: "Sin registros" };
+  fechas.sort(function(a, b) { return a - b; });
+  return { inicio: formatearFechaDatePDF(fechas[0]), fin: formatearFechaDatePDF(fechas[fechas.length - 1]) };
+}
+
+function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
+  const w = doc.internal.pageSize.getWidth();
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, w, 108, "F");
+
+  if (logoData) {
+    try { doc.addImage(logoData, "PNG", 20, 16, 72, 72); } catch (e) {}
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(5, 31, 89);
+  const escuela = SEC2_PDF_ESCUELA.split("\n");
+  doc.text(escuela[0], 142, 31);
+  doc.text(escuela[1], 142, 48);
+  doc.setDrawColor(220, 38, 38);
+  doc.setLineWidth(0.8);
+  doc.line(142, 64, 378, 64);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.text(SEC2_PDF_LEMA, 171, 80);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text("REPORTE DE INCIDENCIAS", w - 24, 23, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text("Resumen del docente", w - 24, 36, { align: "right" });
+  doc.text("Fecha de generación:", w - 160, 55);
+  doc.text(formatearFechaHoraPDF(new Date()), w - 24, 55, { align: "right" });
+  doc.text("Periodo del reporte:", w - 160, 70);
+  doc.text(`${periodo.inicio} al ${periodo.fin}`, w - 24, 70, { align: "right" });
+}
+
+function dibujarTarjetaDocentePDF(doc, persona, y) {
+  const w = doc.internal.pageSize.getWidth();
+  const x = 20;
+  const ancho = w - 40;
+  doc.setDrawColor(205, 215, 228);
+  doc.setLineWidth(0.7);
+  doc.roundedRect(x, y, ancho, 72, 4, 4);
+  doc.setFillColor(241, 245, 255);
+  doc.circle(x + 38, y + 36, 26, "F");
+  dibujarAvatarPersonaPDF(doc, x + 26, y + 22, 24, [80, 80, 255]);
+
+  const nombre = limpiarTextoPDF(`${persona.Nombre || persona.nombre || ""} ${persona.Apellidos || persona.apellidos || ""}`.trim() || "DOCENTE").toUpperCase();
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(5, 31, 89);
+  doc.text(nombre, x + 84, y + 26);
+  doc.setFontSize(8.5);
+  doc.text("Turno:", x + 84, y + 45);
+  doc.setFont("helvetica", "normal");
+  doc.text(TURNOS_TEXTO[persona.Turno] || persona.TurnoNombre || persona.turno_nombre || "Sin dato", x + 124, y + 45);
+  doc.setFont("helvetica", "bold");
+  doc.text("Puesto / Rol:", x + 184, y + 45);
+  doc.setFont("helvetica", "normal");
+  doc.text("Docente", x + 240, y + 45);
+  doc.setFont("helvetica", "bold");
+  doc.text("ID de Acceso:", x + 84, y + 61);
+  doc.setFont("helvetica", "normal");
+  doc.text(persona.IDAcceso || persona.id_acceso || "", x + 145, y + 61);
+  return y + 72;
+}
+
+function dibujarEstadisticasRapidasPDF(doc, metricas, y) {
+  const w = doc.internal.pageSize.getWidth();
+  dibujarTituloSeccionPDF(doc, "ESTADÍSTICAS RÁPIDAS", "", y - 4);
+  y += 18;
+
+  const cards = [
+    { nombre: "Total\nincidencias", valor: metricas.totalIncidencias, color: [11, 99, 229], icono: "total" },
+    { nombre: "Permiso\noficial", valor: metricas.tipos.permisoOficial.conteo, color: metricas.tipos.permisoOficial.color, icono: "permisoOficial" },
+    { nombre: "Incapacidad", valor: metricas.tipos.incapacidad.conteo, color: metricas.tipos.incapacidad.color, icono: "incapacidad" },
+    { nombre: "Humanitario\nsindical", valor: metricas.tipos.humanitarioSindical.conteo, color: metricas.tipos.humanitarioSindical.color, icono: "humanitarioSindical" },
+    { nombre: "Humanitario\noficial", valor: metricas.tipos.humanitarioOficial.conteo, color: metricas.tipos.humanitarioOficial.color, icono: "humanitarioOficial" },
+    { nombre: "Comisión\nsindical", valor: metricas.tipos.comisionSindical.conteo, color: metricas.tipos.comisionSindical.color, icono: "comisionSindical" },
+    { nombre: "Comisión\noficial", valor: metricas.tipos.comisionOficial.conteo, color: metricas.tipos.comisionOficial.color, icono: "comisionOficial" },
+    { nombre: "Especial", valor: metricas.tipos.especial.conteo, color: metricas.tipos.especial.color, icono: "especial" }
+  ];
+
+  const x0 = 20;
+  const gap = 6;
+  const cw = (w - 40 - gap * 7) / 8;
+  cards.forEach(function(c, idx) {
+    const x = x0 + idx * (cw + gap);
+    doc.setDrawColor(216, 225, 238);
+    doc.setLineWidth(0.7);
+    doc.roundedRect(x, y, cw, 82, 4, 4);
+    dibujarIconoTipoPDF(doc, c.icono, c.color, x + cw / 2 - 8, y + 14, 16);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.setTextColor(c.color[0], c.color[1], c.color[2]);
+    doc.text(String(c.valor), x + cw / 2, y + 51, { align: "center" });
+    doc.setFontSize(7.2);
+    doc.setTextColor(0, 0, 0);
+    const lineas = String(c.nombre).split("\n");
+    lineas.forEach(function(linea, i) { doc.text(linea, x + cw / 2, y + 67 + i * 9, { align: "center" }); });
+  });
+  return y + 82;
+}
+
+function dibujarTituloSeccionPDF(doc, titulo, subtitulo, y) {
+  const w = doc.internal.pageSize.getWidth();
+  doc.setDrawColor(5, 31, 89);
+  doc.setLineWidth(0.7);
+  doc.line(20, y + 10, 224, y + 10);
+  doc.line(w - 224, y + 10, w - 20, y + 10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.setTextColor(5, 31, 89);
+  doc.text(titulo, w / 2, y + 13, { align: "center" });
+  if (subtitulo) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.6);
+    doc.text(`(${subtitulo})`, w / 2, y + 24, { align: "center" });
+    return y + 28;
+  }
+  return y + 18;
+}
+
+function dibujarResumenTotalPDF(doc, metricas, y) {
+  const w = doc.internal.pageSize.getWidth();
+  const x = 20;
+  const ancho = w - 40;
+  doc.setDrawColor(205, 215, 228);
+  doc.setLineWidth(0.7);
+  doc.roundedRect(x, y, ancho, 54, 4, 4);
+  dibujarIconoTipoPDF(doc, "total", [5, 31, 89], x + 22, y + 15, 24);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(5, 31, 89);
+  doc.text("RESUMEN TOTAL\nDEL PERIODO", x + 58, y + 23);
+  doc.setDrawColor(205, 215, 228);
+  doc.line(x + ancho / 3, y + 10, x + ancho / 3, y + 44);
+  doc.line(x + (ancho / 3) * 2, y + 10, x + (ancho / 3) * 2, y + 44);
+  doc.text("TOTAL DE PERMISOS", x + ancho / 2, y + 20, { align: "center" });
+  doc.setFontSize(17);
+  doc.text(String(metricas.totalIncidencias), x + ancho / 2, y + 38, { align: "center" });
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text("incidencias", x + ancho / 2, y + 49, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("TOTAL DE DÍAS DE INCIDENCIA", x + ancho * 5 / 6, y + 20, { align: "center" });
+  doc.setFontSize(17);
+  doc.text(String(metricas.totalDias), x + ancho * 5 / 6, y + 38, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("días", x + ancho * 5 / 6, y + 49, { align: "center" });
+  return y + 54;
+}
+
+function dibujarGraficoMesesPDF(doc, meses, y) {
+  const w = doc.internal.pageSize.getWidth();
+  const x = 50;
+  const ancho = w - 100;
+  const alto = 124;
+  const entries = Object.keys(meses).sort().map(function(k) { return { key: k, valor: meses[k] }; });
+  if (!entries.length) entries.push({ key: "Sin", valor: 0 });
+  const max = Math.max(1, ...entries.map(function(e) { return e.valor; }));
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(5, 31, 89);
+  doc.text("RESUMEN POR MESES (número de incidencias)", w / 2, y, { align: "center" });
+  doc.setDrawColor(220, 225, 232);
+  doc.setLineWidth(0.7);
+  doc.line(x, y + alto, x + ancho, y + alto);
+  doc.line(x, y + 16, x, y + alto);
+
+  const colores = [[109,40,217], [21,154,52], [11,99,229], [255,90,31], [21,154,52], [255,90,31], [109,40,217], [220,38,38]];
+  const gap = Math.min(26, ancho / entries.length * 0.35);
+  const bw = Math.max(14, Math.min(36, (ancho - gap * (entries.length + 1)) / entries.length));
+  entries.forEach(function(e, idx) {
+    const bx = x + gap + idx * (bw + gap);
+    const bh = e.valor > 0 ? Math.max(8, (e.valor / max) * 84) : 2;
+    const c = colores[idx % colores.length];
+    doc.setFillColor(c[0], c[1], c[2]);
+    doc.roundedRect(bx, y + alto - bh, bw, bh, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(5, 31, 89);
+    if (e.valor > 0) doc.text(String(e.valor), bx + bw / 2, y + alto - bh - 5, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    const etiqueta = etiquetaMesPDF(e.key);
+    doc.text(etiqueta[0], bx + bw / 2, y + alto + 12, { align: "center" });
+    if (etiqueta[1]) doc.text(etiqueta[1], bx + bw / 2, y + alto + 22, { align: "center" });
+  });
+}
+
+function dibujarIconoTipoPDF(doc, clave, color, x, y, s) {
+  doc.setFillColor(color[0], color[1], color[2]);
+  doc.setDrawColor(color[0], color[1], color[2]);
+  doc.setLineWidth(Math.max(1, s * 0.09));
+
+  if (clave === "permisoOficial") {
+    doc.roundedRect(x + s * 0.10, y + s * 0.18, s * 0.78, s * 0.70, s * 0.10, s * 0.10, "F");
+    doc.rect(x + s * 0.28, y + s * 0.46, s * 0.14, s * 0.14, "F");
+    doc.rect(x + s * 0.50, y + s * 0.46, s * 0.14, s * 0.14, "F");
+    return;
+  }
+  if (clave === "incapacidad") {
+    doc.triangle(x + s / 2, y, x + s * 0.90, y + s * 0.22, x + s * 0.80, y + s * 0.78, "F");
+    doc.triangle(x + s / 2, y, x + s * 0.10, y + s * 0.22, x + s * 0.20, y + s * 0.78, "F");
+    doc.triangle(x + s * 0.20, y + s * 0.78, x + s * 0.80, y + s * 0.78, x + s / 2, y + s, "F");
+    return;
+  }
+  if (clave === "humanitarioSindical") {
+    doc.circle(x + s * 0.50, y + s * 0.28, s * 0.18, "F");
+    doc.circle(x + s * 0.25, y + s * 0.39, s * 0.13, "F");
+    doc.circle(x + s * 0.75, y + s * 0.39, s * 0.13, "F");
+    doc.roundedRect(x + s * 0.22, y + s * 0.56, s * 0.56, s * 0.34, s * 0.08, s * 0.08, "F");
+    return;
+  }
+  if (clave === "humanitarioOficial") {
+    doc.ellipse(x + s * 0.50, y + s * 0.48, s * 0.42, s * 0.30, "F");
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(Math.max(1.5, s * 0.13));
+    doc.arc(x + s * 0.50, y + s * 0.44, s * 0.22, s * 0.18, 20, 160);
+    return;
+  }
+  if (clave === "comisionSindical") {
+    dibujarEstrellaPDF(doc, x + s / 2, y + s * 0.42, s * 0.42, color);
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.triangle(x + s * 0.28, y + s * 0.95, x + s * 0.72, y + s * 0.95, x + s * 0.50, y + s * 0.62, "F");
+    return;
+  }
+  if (clave === "comisionOficial") {
+    doc.roundedRect(x + s * 0.12, y + s * 0.32, s * 0.76, s * 0.52, s * 0.08, s * 0.08, "F");
+    doc.roundedRect(x + s * 0.33, y + s * 0.16, s * 0.34, s * 0.18, s * 0.03, s * 0.03, "F");
+    return;
+  }
+  if (clave === "especial") {
+    dibujarEstrellaPDF(doc, x + s / 2, y + s / 2, s * 0.46, color);
+    return;
+  }
+  if (clave === "total") {
+    doc.roundedRect(x + s * 0.15, y + s * 0.08, s * 0.70, s * 0.84, s * 0.08, s * 0.08, "S");
+    doc.line(x + s * 0.32, y + s * 0.32, x + s * 0.72, y + s * 0.32);
+    doc.line(x + s * 0.32, y + s * 0.50, x + s * 0.72, y + s * 0.50);
+    doc.line(x + s * 0.32, y + s * 0.68, x + s * 0.72, y + s * 0.68);
+  }
+}
+
+function dibujarEstrellaPDF(doc, cx, cy, r, color) {
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const ang = -Math.PI / 2 + i * Math.PI / 5;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    pts.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]);
+  }
+  doc.setFillColor(color[0], color[1], color[2]);
+  doc.triangle(pts[0][0], pts[0][1], pts[1][0], pts[1][1], pts[2][0], pts[2][1], "F");
+  doc.lines(pts.slice(1).map(function(p, i) { return [p[0] - pts[i][0], p[1] - pts[i][1]]; }), pts[0][0], pts[0][1], [1, 1], "F", true);
+}
+
+function dibujarAvatarPersonaPDF(doc, x, y, s, color) {
+  doc.setFillColor(color[0], color[1], color[2]);
+  doc.circle(x + s / 2, y + s * 0.30, s * 0.18, "F");
+  doc.roundedRect(x + s * 0.18, y + s * 0.58, s * 0.64, s * 0.30, s * 0.10, s * 0.10, "F");
+}
+
+function obtenerMetaPDF(tipo) {
+  const clave = claveTipoIncidencia(tipo);
+  const tipos = crearConteoTiposEstadisticaPDF();
+  const item = tipos[clave] || tipos.especial;
+  return { clave: item.icono, color: item.color };
+}
+
+function asegurarEspacioPDF(doc, y, alto, logoData, persona, periodo) {
+  const h = doc.internal.pageSize.getHeight();
+  if (y + alto > h - 52) {
+    doc.addPage();
+    dibujarEncabezadoPDF(doc, logoData, persona, periodo);
+    return 118;
+  }
+  return y;
+}
+
+function agregarPieYPaginacionPDF(doc) {
+  const total = doc.internal.getNumberOfPages();
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(220, 38, 38);
+    doc.setLineWidth(0.8);
+    doc.line(20, h - 30, w - 20, h - 30);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(5, 31, 89);
+    doc.text(`“${SEC2_PDF_LEMA}”`, w / 2, h - 16, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text(`Página ${i}/${total}`, w - 24, 92, { align: "right" });
+  }
+}
+
+function abrirPDFEnTelefono(doc, nombreArchivo) {
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+  const nueva = window.open(url, "_blank");
+  if (!nueva) {
+    doc.save(nombreArchivo);
+  }
+  setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+}
+
+function crearNombreArchivoPDF(persona) {
+  const nombre = limpiarTextoPDF(`${persona.Nombre || persona.nombre || ""}_${persona.Apellidos || persona.apellidos || ""}`.trim())
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_\-]/g, "");
+  return `SEC2_historial_${nombre || "docente"}.pdf`;
+}
+
+function cargarImagenPDF(url) {
+  return new Promise(function(resolve) {
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = function() {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function() { resolve(null); };
+      img.src = url;
+    } catch (e) { resolve(null); }
+  });
+}
+
+function parseFechaLocalPDF(valor) {
+  if (!valor) return null;
+  const texto = String(valor).slice(0, 10);
+  const partes = texto.split("-");
+  if (partes.length === 3) {
+    const y = Number(partes[0]);
+    const m = Number(partes[1]);
+    const d = Number(partes[2]);
+    if (y && m && d) return new Date(y, m - 1, d);
+  }
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+}
+
+function esDiaHabilPDF(fecha) {
+  if (!fecha) return false;
+  const dia = fecha.getDay();
+  return dia !== 0 && dia !== 6;
+}
+
+function contarDiasHabilesPDF(inicio, fin) {
+  if (!inicio || !fin || fin < inicio) return 0;
+  let total = 0;
+  const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  const limite = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  while (cursor <= limite) {
+    if (esDiaHabilPDF(cursor)) total += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return total;
+}
+
+function formatearFechaPDF(valor) {
+  const fecha = parseFechaLocalPDF(valor);
+  return fecha ? formatearFechaDatePDF(fecha) : "-";
+}
+
+function formatearFechaDatePDF(fecha) {
+  const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return `${dia}/${meses[fecha.getMonth()]}/${fecha.getFullYear()}`;
+}
+
+function formatearFechaHoraPDF(fecha) {
+  const f = fecha instanceof Date ? fecha : new Date(fecha);
+  const fechaTxt = formatearFechaDatePDF(f);
+  const hora = f.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  return `${fechaTxt}   ${hora}`;
+}
+
+function etiquetaMesPDF(key) {
+  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const partes = String(key).split("-");
+  if (partes.length !== 2) return [key, ""];
+  return [meses[Number(partes[1]) - 1] || partes[1], partes[0]];
+}
+
+function limpiarTextoPDF(valor) {
+  return String(valor || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
 function obtenerMensajeError(err) {
   return err.message || err;
 }
+
