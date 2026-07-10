@@ -1,11 +1,12 @@
 /* =========================================================
-   SEC2 API — Supabase V6
+   SEC2 API — Supabase V7
    Capa compatible con app.js / incidencias.js / reportes.js
 
-   Cambio V5:
-   - Corrige guardado directo según error real de Supabase.
-   - Ya no inserta columnas no existentes: estado, fecha_oficial_1/2/3 ni uso_1/2/3.
-   - Prueba varios nombres de columnas para adaptarse al esquema real de incidencias.
+   Cambio V7:
+   - Guarda incidencias usando el esquema real normalizado de Supabase.
+   - public.incidencias usa: id, folio, usuario_id, tipo_incidencia_id, estado_id,
+     fecha_inicio, fecha_fin, licencia_medica, observaciones, registrado_por_id, fecha_registro.
+   - Resuelve IDAcceso a usuarios.id y TipoIncidencia a tipos_incidencia.id.
    ========================================================= */
 
 const SEC2_API = (() => {
@@ -149,22 +150,30 @@ const SEC2_API = (() => {
   function normalizarIncidenciaDesdeBD(fila) {
     if (!fila) return null;
 
+    const usuario = fila.usuarios || fila.usuario || fila.usuario_detalle || {};
+    const tipo = fila.tipos_incidencia || fila.tipo_incidencia || fila.tipo || {};
+    const estado = fila.estados_incidencia || fila.estado || {};
+    const registrador = fila.registrador || fila.registrado_por || fila.registrado_por_usuario || {};
+
+    const apellidosUsuario = usuario.Apellidos || usuario.apellidos || [usuario.apellido_paterno, usuario.apellido_materno].filter(Boolean).join(" ");
+    const apellidosRegistrador = registrador.Apellidos || registrador.apellidos || [registrador.apellido_paterno, registrador.apellido_materno].filter(Boolean).join(" ");
+
     return {
-      IDIncidencia: fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || "",
-      IDUsuario: fila.IDUsuario || fila.idUsuario || fila.id_usuario || fila.id_acceso_persona || fila.usuario_id || "",
-      Nombre: fila.Nombre || fila.nombre || fila.usuario_nombre || "",
-      Apellidos: fila.Apellidos || fila.apellidos || fila.usuario_apellidos || "",
-      Correo: fila.Correo || fila.correo || "",
-      Rol: fila.Rol || fila.rol || "",
-      Turno: fila.Turno || fila.turno || fila.turno_clave || "",
-      TipoIncidencia: fila.TipoIncidencia || fila.tipoIncidencia || fila.tipo_incidencia || fila.tipo || "",
+      IDIncidencia: fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || fila.folio || "",
+      IDUsuario: fila.IDUsuario || fila.idUsuario || fila.id_usuario || fila.id_acceso_persona || usuario.id_acceso || usuario.IDAcceso || fila.usuario_id || "",
+      Nombre: fila.Nombre || fila.nombre || fila.usuario_nombre || usuario.nombre || usuario.Nombre || "",
+      Apellidos: fila.Apellidos || fila.apellidos || fila.usuario_apellidos || apellidosUsuario || "",
+      Correo: fila.Correo || fila.correo || usuario.correo || usuario.Correo || "",
+      Rol: fila.Rol || fila.rol || usuario.rol || usuario.Rol || "",
+      Turno: fila.Turno || fila.turno || fila.turno_clave || usuario.turno_clave || usuario.Turno || "",
+      TipoIncidencia: fila.TipoIncidencia || fila.tipoIncidencia || fila.tipo_incidencia || tipo.nombre || tipo.Nombre || tipo.clave || tipo.Clave || "",
       FechaInicio: fila.FechaInicio || fila.fechaInicio || fila.fecha_inicio || "",
       FechaFin: fila.FechaFin || fila.fechaFin || fila.fecha_fin || "",
       LicenciaMedica: fila.LicenciaMedica || fila.licenciaMedica || fila.licencia_medica || "",
       Observaciones: fila.Observaciones || fila.observaciones || "",
-      RegistradoPor: fila.RegistradoPor || fila.registradoPor || fila.registrado_por || "",
+      RegistradoPor: fila.RegistradoPor || fila.registradoPor || fila.registrado_por || registrador.id_acceso || registrador.IDAcceso || apellidosRegistrador || fila.registrado_por_id || "",
       FechaRegistro: fila.FechaRegistro || fila.fechaRegistro || fila.fecha_registro || fila.created_at || "",
-      Estado: fila.Estado || fila.estado || "Activa",
+      Estado: fila.Estado || fila.estado || estado.nombre || estado.Nombre || estado.clave || estado.Clave || "Activa",
       FechaOficial1: fila.FechaOficial1 || fila.fechaOficial1 || fila.fecha_oficial_1 || "",
       FechaOficial2: fila.FechaOficial2 || fila.fechaOficial2 || fila.fecha_oficial_2 || "",
       FechaOficial3: fila.FechaOficial3 || fila.fechaOficial3 || fila.fecha_oficial_3 || "",
@@ -291,150 +300,162 @@ const SEC2_API = (() => {
     });
   }
 
-  async function guardarIncidenciaAsync(datos) {
-    validarDatosIncidencia(datos);
-
-    /*
-      SEC2_FIX_GUARDAR_DIRECTO_MINIMO_V6_20260709
-      La RPC guardar_incidencia_sec2 no existe todavía en Supabase.
-      Para incidencias simples NO se deben enviar campos de permiso oficial.
-      Se guarda directo en public.incidencias con columnas mínimas.
-    */
-    const idRespaldo = generarIDIncidenciaTemporal();
-    return await guardarIncidenciaFallbackDirecto(datos, idRespaldo, null);
+  function normalizarClaveCatalogo(texto) {
+    return normalizarTexto(texto)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
   }
 
-  async function guardarIncidenciaFallbackDirecto(datos, idRespaldo, errorRPC) {
+  async function buscarUsuarioPorIDAcceso(idAcceso, etiqueta) {
     const supabase = getClient();
-    const d = datos || {};
-    const oficial = esPermisoOficial(d);
-    const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
-    const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
-    const ahoraISO = new Date().toISOString();
-    const idUsuario = normalizarTexto(d.IDUsuario);
-    const tipo = normalizarTexto(d.TipoIncidencia);
-    const licencia = valorONull(d.LicenciaMedica);
-    const observaciones = valorONull(d.Observaciones);
-    const registradoPor = normalizarTexto(d.RegistradoPor || idSesion());
+    const valor = normalizarTexto(idAcceso);
 
-    /*
-      SEC2_FIX_FALLBACK_INCIDENCIAS_V6_20260709
-      Errores reales detectados:
-      - public.Incidencias no existe.
-      - public.incidencias no tiene columna estado.
-      - public.incidencias no tiene columnas fecha_oficial_1/2/3.
+    if (!valor) {
+      throw new Error(`No se recibió IDAcceso para resolver ${etiqueta}.`);
+    }
 
-      Por eso se intenta primero un insert mínimo en public.incidencias.
-      Si el esquema usa nombres distintos, se prueban variantes comunes sin
-      romper la app ni enviarla al splash.
-    */
     const intentos = [
-      {
-        nombre: "snake_case_minimo",
-        fila: {
-          id_incidencia: idRespaldo,
-          id_usuario: idUsuario,
-          tipo_incidencia: tipo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
-          licencia_medica: licencia,
-          observaciones: observaciones,
-          registrado_por: registradoPor,
-          fecha_registro: ahoraISO
-        }
-      },
-      {
-        nombre: "snake_case_sin_id_incidencia",
-        fila: {
-          id_usuario: idUsuario,
-          tipo_incidencia: tipo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
-          licencia_medica: licencia,
-          observaciones: observaciones,
-          registrado_por: registradoPor,
-          fecha_registro: ahoraISO
-        }
-      },
-      {
-        nombre: "lowercase_sin_guion_minimo",
-        fila: {
-          idincidencia: idRespaldo,
-          idusuario: idUsuario,
-          tipoincidencia: tipo,
-          fechainicio: fechaInicio,
-          fechafin: fechaFin,
-          licenciamedica: licencia,
-          observaciones: observaciones,
-          registradopor: registradoPor,
-          fecharegistro: ahoraISO
-        }
-      },
-      {
-        nombre: "lowercase_sin_guion_sin_id_incidencia",
-        fila: {
-          idusuario: idUsuario,
-          tipoincidencia: tipo,
-          fechainicio: fechaInicio,
-          fechafin: fechaFin,
-          licenciamedica: licencia,
-          observaciones: observaciones,
-          registradopor: registradoPor,
-          fecharegistro: ahoraISO
-        }
-      },
-      {
-        nombre: "usuario_id_minimo",
-        fila: {
-          incidencia_id: idRespaldo,
-          usuario_id: idUsuario,
-          tipo: tipo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
-          licencia_medica: licencia,
-          observaciones: observaciones,
-          registrado_por: registradoPor,
-          created_at: ahoraISO
-        }
-      },
-      {
-        nombre: "usuario_id_sin_id_incidencia",
-        fila: {
-          usuario_id: idUsuario,
-          tipo: tipo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
-          licencia_medica: licencia,
-          observaciones: observaciones,
-          registrado_por: registradoPor,
-          created_at: ahoraISO
-        }
-      }
+      { columna: "id_acceso", valor },
+      { columna: "IDAcceso", valor },
+      { columna: "idacceso", valor },
+      { columna: "id", valor }
     ];
 
     const errores = [];
 
     for (const intento of intentos) {
       const { data, error } = await supabase
-        .from("incidencias")
-        .insert(intento.fila)
-        .select()
-        .single();
+        .from("usuarios")
+        .select("*")
+        .eq(intento.columna, intento.valor)
+        .maybeSingle();
 
-      if (!error) {
-        const normalizada = normalizarIncidenciaDesdeBD(data || intento.fila);
-        return {
-          success: true,
-          IDIncidencia: normalizada.IDIncidencia || idRespaldo,
-          incidencia: Object.assign({}, normalizada, { IDIncidencia: normalizada.IDIncidencia || idRespaldo })
-        };
-      }
-
-      errores.push(`${intento.nombre}: ${error.message || error}`);
+      if (!error && data) return data;
+      if (error) errores.push(`usuarios.${intento.columna}: ${error.message || error}`);
     }
 
-    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "Guardado directo SEC2 V6.";
-    throw new Error(`${mensajeRPC} No pudo insertar en public.incidencias con columnas mínimas. Intentos: ${errores.join(" | ")}`);
+    throw new Error(`No se encontró ${etiqueta} en usuarios con IDAcceso ${valor}. ${errores.join(" | ")}`);
+  }
+
+  async function buscarTipoIncidencia(tipoTexto) {
+    const supabase = getClient();
+    const tipo = normalizarTexto(tipoTexto);
+    const clave = normalizarClaveCatalogo(tipo);
+
+    if (!tipo) throw new Error("No se recibió tipo de incidencia.");
+
+    const intentos = [
+      { metodo: "eq", columna: "nombre", valor: tipo },
+      { metodo: "ilike", columna: "nombre", valor: tipo },
+      { metodo: "eq", columna: "clave", valor: clave },
+      { metodo: "eq", columna: "codigo", valor: clave }
+    ];
+
+    const errores = [];
+
+    for (const intento of intentos) {
+      let query = supabase.from("tipos_incidencia").select("*");
+
+      if (intento.metodo === "ilike") query = query.ilike(intento.columna, intento.valor);
+      else query = query.eq(intento.columna, intento.valor);
+
+      const { data, error } = await query.maybeSingle();
+
+      if (!error && data) return data;
+      if (error) errores.push(`tipos_incidencia.${intento.columna}: ${error.message || error}`);
+    }
+
+    throw new Error(`No se encontró el tipo de incidencia: ${tipo}. Revisa tabla tipos_incidencia. ${errores.join(" | ")}`);
+  }
+
+  async function buscarEstadoIncidenciaActivo() {
+    const supabase = getClient();
+
+    const candidatos = ["Activa", "Activo", "Vigente", "Registrada", "Abierta"];
+    const errores = [];
+
+    for (const nombre of candidatos) {
+      const clave = normalizarClaveCatalogo(nombre);
+      const intentos = [
+        { metodo: "eq", columna: "nombre", valor: nombre },
+        { metodo: "ilike", columna: "nombre", valor: nombre },
+        { metodo: "eq", columna: "clave", valor: clave },
+        { metodo: "eq", columna: "codigo", valor: clave }
+      ];
+
+      for (const intento of intentos) {
+        let query = supabase.from("estados_incidencia").select("*");
+        if (intento.metodo === "ilike") query = query.ilike(intento.columna, intento.valor);
+        else query = query.eq(intento.columna, intento.valor);
+
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) return data;
+        if (error) errores.push(`estados_incidencia.${intento.columna}: ${error.message || error}`);
+      }
+    }
+
+    const { data, error } = await supabase.from("estados_incidencia").select("*").limit(1).maybeSingle();
+    if (!error && data) return data;
+    if (error) errores.push(`estados_incidencia.limit(1): ${error.message || error}`);
+
+    throw new Error(`No se pudo resolver estado activo en estados_incidencia. ${errores.join(" | ")}`);
+  }
+
+  async function guardarIncidenciaAsync(datos) {
+    validarDatosIncidencia(datos);
+
+    /*
+      SEC2_FIX_SCHEMA_REAL_INCIDENCIAS_V7_20260709
+      Esquema confirmado en Supabase:
+      incidencias.id uuid, folio text, usuario_id uuid, tipo_incidencia_id uuid,
+      estado_id uuid, fecha_inicio date, fecha_fin date, licencia_medica text,
+      observaciones text, registrado_por_id uuid, fecha_registro timestamptz.
+    */
+    const supabase = getClient();
+    const d = datos || {};
+    const oficial = esPermisoOficial(d);
+    const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
+    const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
+    const folio = generarIDIncidenciaTemporal();
+
+    const usuario = await buscarUsuarioPorIDAcceso(d.IDUsuario, "docente afectado");
+    const registrador = await buscarUsuarioPorIDAcceso(d.RegistradoPor || idSesion(), "usuario registrador");
+    const tipo = await buscarTipoIncidencia(d.TipoIncidencia);
+    const estado = await buscarEstadoIncidenciaActivo();
+
+    const fila = {
+      folio: folio,
+      usuario_id: usuario.id,
+      tipo_incidencia_id: tipo.id,
+      estado_id: estado.id,
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
+      licencia_medica: valorONull(d.LicenciaMedica),
+      observaciones: valorONull(d.Observaciones),
+      registrado_por_id: registrador.id,
+      fecha_registro: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from("incidencias")
+      .insert(fila)
+      .select("*, usuarios:usuario_id(*), tipos_incidencia:tipo_incidencia_id(*), estados_incidencia:estado_id(*), registrador:registrado_por_id(*)")
+      .single();
+
+    if (error) {
+      throw new Error(`Guardado directo SEC2 V7 falló en public.incidencias: ${error.message || error}`);
+    }
+
+    const normalizada = normalizarIncidenciaDesdeBD(data || fila);
+
+    return {
+      success: true,
+      IDIncidencia: normalizada.IDIncidencia || (data && data.id) || folio,
+      incidencia: Object.assign({}, normalizada, { IDIncidencia: normalizada.IDIncidencia || (data && data.id) || folio })
+    };
   }
 
   async function obtenerDetalleIncidenciaAsync(idIncidencia) {
@@ -458,18 +479,17 @@ const SEC2_API = (() => {
   async function obtenerDetalleIncidenciaFallbackDirecto(idIncidencia, errorRPC) {
     const supabase = getClient();
     const intentos = [
-      { tabla: "Incidencias", columna: "IDIncidencia" },
-      { tabla: "incidencias", columna: "id_incidencia" },
-      { tabla: "incidencias", columna: "id" }
+      { columna: "id", valor: idIncidencia },
+      { columna: "folio", valor: idIncidencia }
     ];
 
     const errores = [];
 
     for (const intento of intentos) {
       const { data, error } = await supabase
-        .from(intento.tabla)
-        .select("*")
-        .eq(intento.columna, idIncidencia)
+        .from("incidencias")
+        .select("*, usuarios:usuario_id(*), tipos_incidencia:tipo_incidencia_id(*), estados_incidencia:estado_id(*), registrador:registrado_por_id(*)")
+        .eq(intento.columna, intento.valor)
         .maybeSingle();
 
       if (!error && data) {
@@ -480,7 +500,7 @@ const SEC2_API = (() => {
         };
       }
 
-      if (error) errores.push(`${intento.tabla}.${intento.columna}: ${error.message || error}`);
+      if (error) errores.push(`incidencias.${intento.columna}: ${error.message || error}`);
     }
 
     const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "RPC obtener_detalle_incidencia_sec2 no disponible.";
