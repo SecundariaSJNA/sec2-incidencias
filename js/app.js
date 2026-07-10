@@ -1,3 +1,4 @@
+/* SEC2_APP_V13_ELIMINAR_REGRESA_DOCENTE_TITULO_DOCENTE_20260709 */
 const TEST_USERS = {
   "Direccion": "D001",
   "Correspondencia": "C001",
@@ -106,6 +107,7 @@ const MODULES = {
 let currentModule = "";
 let selectedType = null;
 let selectedPersonID = "";
+let selectedDetailPersonID = "";
 let selectedIncidentID = "";
 let selectedNotificationID = "";
 let profileMode = false;
@@ -583,14 +585,46 @@ function continuarHistorialPersona() {
   cargarResumenPersona(id);
 }
 
-function cargarResumenPersona(idPersona) {
+function cargarResumenPersona(idPersona, pushHistory = true) {
   selectedPersonID = idPersona;
+  actualizarEncabezadoResumenPersona();
   document.getElementById("personSummaryContent").innerHTML = crearTarjetaSimple("Cargando resumen...", "Consultando base de datos.");
-  showScreen("personSummaryScreen");
+  showScreen("personSummaryScreen", pushHistory);
   
   API.obtenerResumenPersona(idPersona, renderResumenPersona, error => {
     document.getElementById("personSummaryContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
+}
+
+function actualizarEncabezadoResumenPersona() {
+  const pantalla = document.getElementById("personSummaryScreen");
+  if (!pantalla) return;
+
+  const titulo = pantalla.querySelector(".page-title");
+  const subtitulo = pantalla.querySelector(".page-subtitle");
+  const icono = pantalla.querySelector(".brand-icon");
+
+  if (profileMode) {
+    if (titulo) {
+      titulo.textContent = "Mi perfil";
+      titulo.className = "page-title color-gold";
+    }
+    if (subtitulo) subtitulo.textContent = "Información personal e historial propio";
+    if (icono) {
+      icono.className = "brand-icon solid-gold";
+      icono.setAttribute("data-icon", "user");
+    }
+  } else {
+    if (titulo) {
+      titulo.textContent = "Docente";
+      titulo.className = "page-title color-green";
+    }
+    if (subtitulo) subtitulo.textContent = "Resumen e historial del docente";
+    if (icono) {
+      icono.className = "brand-icon solid-green";
+      icono.setAttribute("data-icon", "user");
+    }
+  }
 }
 
 function renderResumenPersona(respuesta) {
@@ -860,6 +894,7 @@ function renderHistorialConDetalles(incidencias) {
 
 function abrirDetalleIncidencia(idIncidencia, regresarA = "") {
   selectedIncidentID = idIncidencia;
+  selectedDetailPersonID = "";
   detailBackOverride = regresarA || "";
   document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Cargando detalle...", "Consultando base de datos.");
 
@@ -880,6 +915,7 @@ function renderDetalleIncidencia(respuesta) {
   const andPuedeEditar = respuesta.puedeEditar;
   const andPuedeEliminar = respuesta.puedeEliminar;
   const folioVisible = obtenerFolioVisibleIncidencia(i);
+  selectedDetailPersonID = i.IDUsuario || i.IDAcceso || selectedPersonID || "";
 
   document.getElementById("detailBrandIcon").className = `brand-icon solid-${meta.color}`;
   document.getElementById("detailBrandIcon").setAttribute("data-icon", meta.icono);
@@ -1117,8 +1153,22 @@ function valorInput(id) {
 
 function eliminarIncidenciaActual() {
   if(!confirm("¿Estás seguro de eliminar esta incidencia? Esta acción no se puede deshacer.")) return;
+
+  const personaDestino = selectedDetailPersonID || selectedPersonID || "";
+
   API.eliminarIncidencia(selectedIncidentID, function(res) {
-    alert("Incidencia eliminada exitosamente."); goBack();
+    alert("Incidencia eliminada exitosamente.");
+
+    detailBackOverride = "";
+    selectedIncidentID = "";
+    navigationStack = [];
+
+    if (personaDestino) {
+      profileMode = false;
+      cargarResumenPersona(personaDestino, false);
+    } else {
+      goMain();
+    }
   }, function(err) {
     alert("Error eliminando: " + err);
   });
