@@ -90,49 +90,93 @@
     }
 
 
-    /* SEC2_FIX_PERMISO_OFICIAL_LAYOUT_V14_20260709 */
-    #formPermisoOficial .sub-card {
-      overflow: hidden;
+    /* SEC2_FIX_PERMISO_OFICIAL_LAYOUT_V16_20260709
+       Permiso oficial: los inputs de fecha quedan dentro del recuadro,
+       con margen derecho visible y altura reducida en móvil. */
+    #formPermisoOficial {
+      width: 100%;
+      max-width: 100%;
       box-sizing: border-box;
-      padding-left: 18px;
-      padding-right: 18px;
+      overflow: hidden;
+    }
+
+    #formPermisoOficial .sub-card {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+      padding: 18px 16px 16px;
+      border-radius: 22px;
+    }
+
+    #formPermisoOficial .sub-card .section-title,
+    #formPermisoOficial .sub-card .section-subtitle {
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
     }
 
     #formPermisoOficial .official-row {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
-      align-items: start;
-      margin: 12px 0 16px;
+      display: block;
       width: 100%;
+      max-width: 100%;
       box-sizing: border-box;
+      margin: 12px 0 14px;
+      padding: 0 8px;
+      overflow: hidden;
+    }
+
+    #formPermisoOficial .official-label {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin: 0 0 7px;
+      line-height: 1.25;
+      font-size: 14px;
     }
 
     #formPermisoOficial .official-row input[type="date"] {
+      display: block;
       width: 100%;
       max-width: 100%;
       min-width: 0;
       box-sizing: border-box;
-      height: 58px;
-      padding-left: 16px;
-      padding-right: 16px;
-      font-size: 18px;
+      height: 48px;
+      min-height: 48px;
+      max-height: 48px;
+      margin: 0;
+      padding: 0 14px;
+      border-radius: 16px;
+      font-size: 16px;
+      line-height: 1.1;
+      background: #ffffff;
+      overflow: hidden;
+      -webkit-appearance: none;
+      appearance: none;
     }
 
-    #formPermisoOficial .official-label {
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      line-height: 1.25;
-    }
+    @media (max-width: 430px) {
+      #formPermisoOficial .sub-card {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
 
-    @media (min-width: 520px) {
       #formPermisoOficial .official-row {
-        grid-template-columns: 150px minmax(0, 1fr);
-        gap: 12px;
-        align-items: center;
+        padding-left: 6px;
+        padding-right: 6px;
+      }
+
+      #formPermisoOficial .official-row input[type="date"] {
+        height: 46px;
+        min-height: 46px;
+        max-height: 46px;
+        font-size: 15px;
+        padding-left: 12px;
+        padding-right: 12px;
       }
     }
+
   </style>
 </head>
 
