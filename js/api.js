@@ -1,11 +1,11 @@
 /* =========================================================
-   SEC2 API — Supabase V4
+   SEC2 API — Supabase V6
    Capa compatible con app.js / incidencias.js / reportes.js
 
-   Cambio V4:
-   - Corrige firma RPC de guardar incidencia.
-   - Corrige fallback directo a tabla public.incidencias sin columna estado.
-   - Se conservan pendientes edición, eliminación y notificaciones.
+   Cambio V5:
+   - Corrige guardado directo según error real de Supabase.
+   - Ya no inserta columnas no existentes: estado, fecha_oficial_1/2/3 ni uso_1/2/3.
+   - Prueba varios nombres de columnas para adaptarse al esquema real de incidencias.
    ========================================================= */
 
 const SEC2_API = (() => {
@@ -77,18 +77,18 @@ const SEC2_API = (() => {
     const d = datos || {};
     const oficial = esPermisoOficial(d);
 
+    /*
+      SEC2_FIX_RPC_GUARDAR_V5_20260709
+      La función RPC aún no existe en Supabase o no coincide con la firma.
+      Usamos una firma mínima para no seguir enviando parámetros de columnas
+      que el esquema real no tiene: fecha_oficial_1/2/3 ni uso_1/2/3.
+    */
     return {
       p_id_acceso_sesion: idSesion(),
       p_id_acceso_persona: normalizarTexto(d.IDUsuario),
       p_tipo_incidencia: normalizarTexto(d.TipoIncidencia),
       p_fecha_inicio: oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio),
       p_fecha_fin: oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin),
-      p_fecha_oficial_1: fechaONull(d.FechaOficial1),
-      p_fecha_oficial_2: fechaONull(d.FechaOficial2),
-      p_fecha_oficial_3: fechaONull(d.FechaOficial3),
-      p_uso_1_fecha: fechaONull(d.Uso1Fecha),
-      p_uso_2_fecha: fechaONull(d.Uso2Fecha),
-      p_uso_3_fecha: fechaONull(d.Uso3Fecha),
       p_licencia_medica: valorONull(d.LicenciaMedica),
       p_observaciones: valorONull(d.Observaciones),
       p_registrado_por: normalizarTexto(d.RegistradoPor || idSesion())
@@ -294,29 +294,14 @@ const SEC2_API = (() => {
   async function guardarIncidenciaAsync(datos) {
     validarDatosIncidencia(datos);
 
+    /*
+      SEC2_FIX_GUARDAR_DIRECTO_MINIMO_V6_20260709
+      La RPC guardar_incidencia_sec2 no existe todavía en Supabase.
+      Para incidencias simples NO se deben enviar campos de permiso oficial.
+      Se guarda directo en public.incidencias con columnas mínimas.
+    */
     const idRespaldo = generarIDIncidenciaTemporal();
-    const parametros = normalizarIncidenciaParaRPC(datos);
-
-    try {
-      /*
-        SEC2_FIX_RPC_GUARDAR_V4_20260709
-        Primero se intenta la RPC con los parámetros base.
-        La versión anterior agregaba p_id_incidencia_respaldo y Supabase
-        no encontraba la firma de la función en el schema cache.
-      */
-      const respuesta = await rpc("guardar_incidencia_sec2", parametros);
-      return normalizarRespuestaGuardado(respuesta, idRespaldo);
-    } catch (errorRPCBase) {
-      try {
-        const parametrosConRespaldo = Object.assign({}, parametros, {
-          p_id_incidencia_respaldo: idRespaldo
-        });
-        const respuesta = await rpc("guardar_incidencia_sec2", parametrosConRespaldo);
-        return normalizarRespuestaGuardado(respuesta, idRespaldo);
-      } catch (errorRPCConRespaldo) {
-        return await guardarIncidenciaFallbackDirecto(datos, idRespaldo, errorRPCConRespaldo || errorRPCBase);
-      }
-    }
+    return await guardarIncidenciaFallbackDirecto(datos, idRespaldo, null);
   }
 
   async function guardarIncidenciaFallbackDirecto(datos, idRespaldo, errorRPC) {
@@ -326,48 +311,130 @@ const SEC2_API = (() => {
     const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
     const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
     const ahoraISO = new Date().toISOString();
+    const idUsuario = normalizarTexto(d.IDUsuario);
+    const tipo = normalizarTexto(d.TipoIncidencia);
+    const licencia = valorONull(d.LicenciaMedica);
+    const observaciones = valorONull(d.Observaciones);
+    const registradoPor = normalizarTexto(d.RegistradoPor || idSesion());
 
     /*
-      SEC2_FIX_FALLBACK_INCIDENCIAS_V4_20260709
-      La tabla real detectada por el error de Supabase es public.incidencias.
-      No existe public.Incidencias y la tabla lowercase no tiene columna estado.
-      Por eso este fallback ya NO intenta insertar Estado/estado ni UsoXEstado.
+      SEC2_FIX_FALLBACK_INCIDENCIAS_V6_20260709
+      Errores reales detectados:
+      - public.Incidencias no existe.
+      - public.incidencias no tiene columna estado.
+      - public.incidencias no tiene columnas fecha_oficial_1/2/3.
+
+      Por eso se intenta primero un insert mínimo en public.incidencias.
+      Si el esquema usa nombres distintos, se prueban variantes comunes sin
+      romper la app ni enviarla al splash.
     */
-    const fila = {
-      id_incidencia: idRespaldo,
-      id_usuario: normalizarTexto(d.IDUsuario),
-      tipo_incidencia: normalizarTexto(d.TipoIncidencia),
-      fecha_inicio: fechaInicio,
-      fecha_fin: fechaFin,
-      licencia_medica: valorONull(d.LicenciaMedica),
-      observaciones: valorONull(d.Observaciones),
-      registrado_por: normalizarTexto(d.RegistradoPor || idSesion()),
-      fecha_registro: ahoraISO,
-      fecha_oficial_1: fechaONull(d.FechaOficial1),
-      fecha_oficial_2: fechaONull(d.FechaOficial2),
-      fecha_oficial_3: fechaONull(d.FechaOficial3),
-      uso_1_fecha: fechaONull(d.Uso1Fecha),
-      uso_2_fecha: fechaONull(d.Uso2Fecha),
-      uso_3_fecha: fechaONull(d.Uso3Fecha)
-    };
+    const intentos = [
+      {
+        nombre: "snake_case_minimo",
+        fila: {
+          id_incidencia: idRespaldo,
+          id_usuario: idUsuario,
+          tipo_incidencia: tipo,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          licencia_medica: licencia,
+          observaciones: observaciones,
+          registrado_por: registradoPor,
+          fecha_registro: ahoraISO
+        }
+      },
+      {
+        nombre: "snake_case_sin_id_incidencia",
+        fila: {
+          id_usuario: idUsuario,
+          tipo_incidencia: tipo,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          licencia_medica: licencia,
+          observaciones: observaciones,
+          registrado_por: registradoPor,
+          fecha_registro: ahoraISO
+        }
+      },
+      {
+        nombre: "lowercase_sin_guion_minimo",
+        fila: {
+          idincidencia: idRespaldo,
+          idusuario: idUsuario,
+          tipoincidencia: tipo,
+          fechainicio: fechaInicio,
+          fechafin: fechaFin,
+          licenciamedica: licencia,
+          observaciones: observaciones,
+          registradopor: registradoPor,
+          fecharegistro: ahoraISO
+        }
+      },
+      {
+        nombre: "lowercase_sin_guion_sin_id_incidencia",
+        fila: {
+          idusuario: idUsuario,
+          tipoincidencia: tipo,
+          fechainicio: fechaInicio,
+          fechafin: fechaFin,
+          licenciamedica: licencia,
+          observaciones: observaciones,
+          registradopor: registradoPor,
+          fecharegistro: ahoraISO
+        }
+      },
+      {
+        nombre: "usuario_id_minimo",
+        fila: {
+          incidencia_id: idRespaldo,
+          usuario_id: idUsuario,
+          tipo: tipo,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          licencia_medica: licencia,
+          observaciones: observaciones,
+          registrado_por: registradoPor,
+          created_at: ahoraISO
+        }
+      },
+      {
+        nombre: "usuario_id_sin_id_incidencia",
+        fila: {
+          usuario_id: idUsuario,
+          tipo: tipo,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          licencia_medica: licencia,
+          observaciones: observaciones,
+          registrado_por: registradoPor,
+          created_at: ahoraISO
+        }
+      }
+    ];
 
-    const { data, error } = await supabase
-      .from("incidencias")
-      .insert(fila)
-      .select()
-      .single();
+    const errores = [];
 
-    if (!error) {
-      const normalizada = normalizarIncidenciaDesdeBD(data || fila);
-      return {
-        success: true,
-        IDIncidencia: normalizada.IDIncidencia || idRespaldo,
-        incidencia: Object.assign({}, normalizada, { IDIncidencia: normalizada.IDIncidencia || idRespaldo })
-      };
+    for (const intento of intentos) {
+      const { data, error } = await supabase
+        .from("incidencias")
+        .insert(intento.fila)
+        .select()
+        .single();
+
+      if (!error) {
+        const normalizada = normalizarIncidenciaDesdeBD(data || intento.fila);
+        return {
+          success: true,
+          IDIncidencia: normalizada.IDIncidencia || idRespaldo,
+          incidencia: Object.assign({}, normalizada, { IDIncidencia: normalizada.IDIncidencia || idRespaldo })
+        };
+      }
+
+      errores.push(`${intento.nombre}: ${error.message || error}`);
     }
 
-    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "RPC guardar_incidencia_sec2 no disponible.";
-    throw new Error(`${mensajeRPC} / Fallback directo no pudo insertar en public.incidencias: ${error.message || error}`);
+    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "Guardado directo SEC2 V6.";
+    throw new Error(`${mensajeRPC} No pudo insertar en public.incidencias con columnas mínimas. Intentos: ${errores.join(" | ")}`);
   }
 
   async function obtenerDetalleIncidenciaAsync(idIncidencia) {
