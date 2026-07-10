@@ -111,6 +111,7 @@ let selectedNotificationID = "";
 let profileMode = false;
 let currentScreen = "loginScreen";
 let navigationStack = [];
+let detailBackOverride = "";
 
 window.addEventListener("load", () => {
   inicializarIconos();
@@ -285,6 +286,13 @@ function prepararScrollPantallaActivaApp(el) {
 }
 
 function goBack() {
+  if (currentScreen === "detailScreen" && detailBackOverride) {
+    const destino = detailBackOverride;
+    detailBackOverride = "";
+    showScreen(destino, false);
+    return;
+  }
+
   const previous = navigationStack.pop();
   if (!previous || previous === "splash") {
     goMain();
@@ -776,9 +784,16 @@ function renderHistorialConDetalles(incidencias) {
   inicializarIconos();
 }
 
-function abrirDetalleIncidencia(idIncidencia) {
-  selectedIncidentID = idIncidencia; document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Cargando detalle...", "Consultando base de datos.");
-  showScreen("detailScreen");
+function abrirDetalleIncidencia(idIncidencia, regresarA = "") {
+  selectedIncidentID = idIncidencia;
+  detailBackOverride = regresarA || "";
+  document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Cargando detalle...", "Consultando base de datos.");
+
+  if (detailBackOverride) {
+    showScreen("detailScreen", false);
+  } else {
+    showScreen("detailScreen");
+  }
   
   API.obtenerDetalleIncidencia(idIncidencia, renderDetalleIncidencia, error => {
     document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
@@ -1293,6 +1308,7 @@ function guardarFormulario() {
     RegistradoPor: usuarioIDAcceso
   };
 
+  // SEC2_FIX_DETALLE_REGRESO_A_TIPOS_20260709
   // SEC2_FIX_GUARDAR_SIN_SPLASH_20260709
   // No cambiar de pantalla aquí. El estado debe verse dentro del formulario.
   mostrarEstadoFormulario("Guardando incidencia...", false, false);
@@ -1303,7 +1319,7 @@ function guardarFormulario() {
     const idIncidenciaGuardada = obtenerIDIncidenciaDesdeRespuesta(resultado);
 
     if (idIncidenciaGuardada) {
-      setTimeout(function() { abrirDetalleIncidencia(idIncidenciaGuardada); }, 900);
+      setTimeout(function() { abrirDetalleIncidencia(idIncidenciaGuardada, "typeScreen"); }, 900);
     } else {
       console.warn("La incidencia se guardó, pero la respuesta no incluyó IDIncidencia:", resultado);
       setTimeout(function() {
