@@ -212,6 +212,89 @@
       }
     }
 
+
+    /* SEC2_FIX_FECHAS_OFICIALES_CENTRADO_EDITAR_V18_20260710 */
+    #formPermisoOficial .official-row input[type="date"],
+    #editUseContent .official-row input[type="date"],
+    #editUseContent .official-row input[type="text"] {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      height: 42px !important;
+      min-height: 42px !important;
+      max-height: 42px !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+      padding: 8px 12px 4px !important;
+      border-radius: 15px !important;
+      line-height: 1.25 !important;
+      text-align: center !important;
+      text-align-last: center !important;
+      background: #ffffff !important;
+      overflow: hidden !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+    }
+
+    #formPermisoOficial .official-row input[type="date"]::-webkit-date-and-time-value,
+    #editUseContent .official-row input[type="date"]::-webkit-date-and-time-value {
+      display: block !important;
+      width: 100% !important;
+      min-height: 24px !important;
+      height: 24px !important;
+      line-height: 24px !important;
+      text-align: center !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    #formPermisoOficial .official-row input[type="date"]::-webkit-datetime-edit,
+    #formPermisoOficial .official-row input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+    #editUseContent .official-row input[type="date"]::-webkit-datetime-edit,
+    #editUseContent .official-row input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+      display: block !important;
+      width: 100% !important;
+      min-height: 24px !important;
+      height: 24px !important;
+      line-height: 24px !important;
+      text-align: center !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    #editUseContent .official-row {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin: 10px 0 12px;
+      padding: 0 8px;
+      overflow: hidden;
+    }
+
+    #editUseContent .official-label {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin: 0 0 6px;
+      line-height: 1.2;
+      font-size: 14px;
+    }
+
+    @media (max-width: 430px) {
+      #formPermisoOficial .official-row input[type="date"],
+      #editUseContent .official-row input[type="date"],
+      #editUseContent .official-row input[type="text"] {
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        padding: 8px 10px 4px !important;
+        font-size: 15px !important;
+      }
+    }
+
   </style>
 </head>
 
