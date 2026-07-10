@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
-    /* SEC2_INDEX_V27_ICONOS_MINIATURA_CORREGIDOS_COMPLETO_20260710 */
+    /* SEC2_INDEX_V29_TARJETAS_ICONO_MAS_AVATAR_20260710 */
     .profile-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -876,20 +876,6 @@
       stroke: none !important;
     }
 
-    .profile-stat-grid .mini-icon .icon-svg [fill],
-    .stat-small .mini-icon .icon-svg [fill],
-    .sec2-type-bar-icon .icon-svg [fill],
-    .incident-avatar.sec2-type-icon-unified .icon-svg [fill] {
-      fill: currentColor !important;
-    }
-
-    .profile-stat-grid .mini-icon .icon-svg [stroke],
-    .stat-small .mini-icon .icon-svg [stroke],
-    .sec2-type-bar-icon .icon-svg [stroke],
-    .incident-avatar.sec2-type-icon-unified .icon-svg [stroke] {
-      stroke: currentColor !important;
-    }
-
     .profile-stat-grid .mini-icon.solid-purple,
     .stat-small .mini-icon.solid-purple,
     .sec2-type-bar-icon.solid-purple,
@@ -960,6 +946,269 @@
       height: 34px !important;
       min-width: 34px !important;
       min-height: 34px !important;
+    }
+
+  
+
+    /* SEC2_FIX_FINAL_V28_ICONOS_MINIATURA_OK_20260710
+       Miniaturas EXACTAS de tipos de incidencia:
+       - sin círculo extra
+       - sin deformación
+       - mismo diseño base de “Íconos de incidencia”
+       - Total mantiene su espacio pero sin icono visible
+       - En tarjetas de incidencias se oculta el avatar de persona
+    */
+    .profile-stat-grid .stat-small {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      padding-top: 12px !important;
+      gap: 2px !important;
+      min-height: 112px !important;
+    }
+
+    .profile-stat-grid .mini-icon,
+    .stat-small .mini-icon,
+    .sec2-type-bar-icon,
+    .incident-avatar.sec2-type-icon-unified {
+      background: transparent !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background-image: none !important;
+    }
+
+    .profile-stat-grid .mini-icon,
+    .stat-small .mini-icon {
+      width: 34px !important;
+      height: 34px !important;
+      min-width: 34px !important;
+      min-height: 34px !important;
+      margin: 0 auto 6px !important;
+      flex: 0 0 34px !important;
+    }
+
+    .profile-stat-grid .stat-small:first-child .mini-icon {
+      visibility: hidden !important;
+      display: flex !important;
+    }
+
+    .profile-stat-grid .stat-num {
+      margin-top: 0 !important;
+    }
+
+    .sec2-type-bar-icon {
+      width: 30px !important;
+      height: 30px !important;
+      min-width: 30px !important;
+      min-height: 30px !important;
+      margin: 8px auto 4px !important;
+      flex: 0 0 30px !important;
+    }
+
+    .sec2-type-chart {
+      align-items: end !important;
+    }
+
+    .sec2-type-bar-item {
+      grid-template-rows: 24px 160px 34px 44px !important;
+    }
+
+    .incident-card {
+      grid-template-columns: 44px 1fr auto !important;
+      column-gap: 14px !important;
+      align-items: center !important;
+    }
+
+    .incident-avatar.sec2-type-icon-unified {
+      width: 44px !important;
+      height: 44px !important;
+      min-width: 44px !important;
+      min-height: 44px !important;
+      margin: 0 !important;
+      align-self: center !important;
+      justify-self: start !important;
+    }
+
+    .incident-card .person-avatar {
+      display: none !important;
+    }
+
+    .incident-card .incident-avatar + .person-avatar {
+      display: none !important;
+      margin-left: 0 !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg,
+    .stat-small .mini-icon .icon-svg,
+    .sec2-type-bar-icon .icon-svg,
+    .incident-avatar.sec2-type-icon-unified .icon-svg {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      display: block !important;
+      overflow: visible !important;
+      color: inherit !important;
+      fill: none !important;
+      stroke: none !important;
+      filter: none !important;
+    }
+
+    .profile-stat-grid .mini-icon .icon-svg *,
+    .stat-small .mini-icon .icon-svg *,
+    .sec2-type-bar-icon .icon-svg *,
+    .incident-avatar.sec2-type-icon-unified .icon-svg * {
+      vector-effect: non-scaling-stroke;
+    }
+
+    .profile-stat-grid .mini-icon.solid-purple,
+    .stat-small .mini-icon.solid-purple,
+    .sec2-type-bar-icon.solid-purple,
+    .incident-avatar.sec2-type-icon-unified.solid-purple { color: #6d28d9 !important; }
+
+    .profile-stat-grid .mini-icon.solid-blue,
+    .stat-small .mini-icon.solid-blue,
+    .sec2-type-bar-icon.solid-blue,
+    .incident-avatar.sec2-type-icon-unified.solid-blue { color: #0b63e5 !important; }
+
+    .profile-stat-grid .mini-icon.solid-green,
+    .stat-small .mini-icon.solid-green,
+    .sec2-type-bar-icon.solid-green,
+    .incident-avatar.sec2-type-icon-unified.solid-green { color: #159a34 !important; }
+
+    .profile-stat-grid .mini-icon.solid-orange,
+    .stat-small .mini-icon.solid-orange,
+    .sec2-type-bar-icon.solid-orange,
+    .incident-avatar.sec2-type-icon-unified.solid-orange { color: #ff5a1f !important; }
+
+    .profile-stat-grid .mini-icon.solid-purple-soft,
+    .stat-small .mini-icon.solid-purple-soft,
+    .sec2-type-bar-icon.solid-purple-soft,
+    .incident-avatar.sec2-type-icon-unified.solid-purple-soft { color: #8b49df !important; }
+
+    .profile-stat-grid .mini-icon.solid-blue-soft,
+    .stat-small .mini-icon.solid-blue-soft,
+    .sec2-type-bar-icon.solid-blue-soft,
+    .incident-avatar.sec2-type-icon-unified.solid-blue-soft { color: #2f80ed !important; }
+
+    .profile-stat-grid .mini-icon.solid-gold,
+    .stat-small .mini-icon.solid-gold,
+    .sec2-type-bar-icon.solid-gold,
+    .incident-avatar.sec2-type-icon-unified.solid-gold { color: #bf8c24 !important; }
+
+    @media (max-width: 430px) {
+      .profile-stat-grid .mini-icon,
+      .stat-small .mini-icon {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        flex-basis: 32px !important;
+      }
+
+      .sec2-type-bar-icon {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        flex-basis: 28px !important;
+      }
+
+      .incident-avatar.sec2-type-icon-unified {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+      }
+    }
+
+  
+
+    /* SEC2_FIX_V29_TARJETAS_ICONO_MAS_AVATAR_20260710
+       En tarjetas de reportes/historial/próximas incidencias deben verse:
+       1) icono de tipo de incidencia
+       2) avatar del docente
+       lado a lado, de tamaño parecido. No se oculta el avatar.
+    */
+    .incident-card {
+      grid-template-columns: 42px 42px 1fr auto !important;
+      column-gap: 8px !important;
+      align-items: center !important;
+    }
+
+    .incident-avatar.sec2-type-icon-unified {
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      min-height: 42px !important;
+      margin: 0 !important;
+      align-self: center !important;
+      justify-self: center !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .incident-avatar.sec2-type-icon-unified .icon-svg {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      color: inherit !important;
+      fill: none !important;
+      stroke: none !important;
+    }
+
+    .incident-card .person-avatar,
+    .incident-card .incident-avatar + .person-avatar {
+      display: flex !important;
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      min-height: 42px !important;
+      margin: 0 !important;
+      border-radius: 999px !important;
+      align-items: center !important;
+      justify-content: center !important;
+      align-self: center !important;
+      justify-self: center !important;
+      background: #eef4ff !important;
+      color: #0b63e5 !important;
+      box-shadow: none !important;
+      overflow: hidden !important;
+    }
+
+    .incident-card .person-avatar .icon-svg {
+      width: 58% !important;
+      height: 58% !important;
+      color: #0b63e5 !important;
+    }
+
+    @media (max-width: 430px) {
+      .incident-card {
+        grid-template-columns: 40px 40px 1fr !important;
+        column-gap: 7px !important;
+      }
+
+      .incident-card .detail-button {
+        grid-column: 3 !important;
+        justify-self: end !important;
+      }
+
+      .incident-avatar.sec2-type-icon-unified,
+      .incident-card .person-avatar,
+      .incident-card .incident-avatar + .person-avatar {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+      }
     }
 
   </style>
