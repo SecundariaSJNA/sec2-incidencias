@@ -1,4 +1,6 @@
-/* SEC2_APP_V29_HISTORIAL_PDF_PREFECTURA_ARC_FIX_20260710 */
+/* SEC2_APP_V31_PDF_ENCABEZADO_SEP_CT_20260710 */
+/* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
+/* Base: V29 + PDF gráfico por meses centrado cuando hay pocos meses */
 /* Base: V28 + PDF visible en Historial General para Dirección/Prefectura/Correspondencia + fix doc.arc */
 /* Base: V27 + botón Historial en PDF y generación PDF en teléfono */
 /* Base funcional: V26, sin cambios lógicos; ajustes visuales van en index V28 */
@@ -2090,8 +2092,13 @@ function obtenerTipoMasUsadoEstadistica(tipos) {
    ========================================================= */
 
 const SEC2_PDF_LOGO_URL = "https://raw.githubusercontent.com/SecSJNA/sec2-app/d810700d427ea454662ff6e4836c4d6431cb8115/logoPng.png";
-const SEC2_PDF_ESCUELA = "ESCUELA SECUNDARIA GENERAL No. 2\n“SUPREMA JUNTA NACIONAL AMERICANA”";
-const SEC2_PDF_LEMA = "Formación académica integral, comunitaria y humanista";
+const SEC2_PDF_HEADER_LINEAS = [
+  "SECRETARIA DE EDUCACIÓN PÚBLICA",
+  "SECRETARIA DE EDUCACIÓN DEL ESTADO",
+  "Escuela Secundaria General No. 2",
+  '"Suprema Junta Nacional Americana"',
+  "C.T. 16DES0056T"
+];
 
 function debeMostrarBotonPDFHistorial() {
   const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
@@ -2310,24 +2317,26 @@ function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   doc.rect(0, 0, w, 108, "F");
 
   if (logoData) {
-    try { doc.addImage(logoData, "PNG", 20, 16, 72, 72); } catch (e) {}
+    try { doc.addImage(logoData, "PNG", 20, 14, 68, 68); } catch (e) {}
   }
 
+  /* Encabezado institucional solicitado: sin lema y sin línea roja superior. */
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(5, 31, 89);
-  const escuela = SEC2_PDF_ESCUELA.split("\n");
-  doc.text(escuela[0], 142, 31);
-  doc.text(escuela[1], 142, 48);
-  doc.setDrawColor(220, 38, 38);
-  doc.setLineWidth(0.8);
-  doc.line(142, 64, 378, 64);
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.5);
-  doc.text(SEC2_PDF_LEMA, 171, 80);
+  doc.setFontSize(11.2);
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], w / 2, 18, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], w / 2, 32, { align: "center" });
+
+  doc.setFontSize(10.2);
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], w / 2, 48, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], w / 2, 62, { align: "center" });
+
+  doc.setFontSize(8.4);
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], w / 2, 76, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
+  doc.setTextColor(5, 31, 89);
   doc.text("REPORTE DE INCIDENCIAS", w - 24, 23, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
@@ -2459,34 +2468,59 @@ function dibujarResumenTotalPDF(doc, metricas, y) {
 
 function dibujarGraficoMesesPDF(doc, meses, y) {
   const w = doc.internal.pageSize.getWidth();
-  const x = 50;
-  const ancho = w - 100;
-  const alto = 124;
+  const x = 54;
+  const ancho = w - 108;
+  const alto = 116;
   const entries = Object.keys(meses).sort().map(function(k) { return { key: k, valor: meses[k] }; });
   if (!entries.length) entries.push({ key: "Sin", valor: 0 });
+
   const max = Math.max(1, ...entries.map(function(e) { return e.valor; }));
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(5, 31, 89);
   doc.text("RESUMEN POR MESES (número de incidencias)", w / 2, y, { align: "center" });
+
   doc.setDrawColor(220, 225, 232);
   doc.setLineWidth(0.7);
   doc.line(x, y + alto, x + ancho, y + alto);
   doc.line(x, y + 16, x, y + alto);
 
   const colores = [[109,40,217], [21,154,52], [11,99,229], [255,90,31], [21,154,52], [255,90,31], [109,40,217], [220,38,38]];
-  const gap = Math.min(26, ancho / entries.length * 0.35);
-  const bw = Math.max(14, Math.min(36, (ancho - gap * (entries.length + 1)) / entries.length));
+  const n = entries.length;
+
+  /*
+    Importante: si solo existe 1 mes, no se pega la barra a la izquierda.
+    Se centra el grupo para evitar el hueco visual enorme que se veía en iPhone.
+  */
+  let bw;
+  let gap;
+  if (n <= 1) {
+    bw = 54;
+    gap = 0;
+  } else if (n <= 3) {
+    bw = 44;
+    gap = 62;
+  } else {
+    gap = Math.min(24, ancho / n * 0.30);
+    bw = Math.max(14, Math.min(32, (ancho - gap * (n - 1)) / n));
+  }
+
+  const grupoAncho = n * bw + Math.max(0, n - 1) * gap;
+  const startX = x + (ancho - grupoAncho) / 2;
+
   entries.forEach(function(e, idx) {
-    const bx = x + gap + idx * (bw + gap);
-    const bh = e.valor > 0 ? Math.max(8, (e.valor / max) * 84) : 2;
+    const bx = startX + idx * (bw + gap);
+    const bh = e.valor > 0 ? Math.max(10, (e.valor / max) * 76) : 2;
     const c = colores[idx % colores.length];
     doc.setFillColor(c[0], c[1], c[2]);
     doc.roundedRect(bx, y + alto - bh, bw, bh, 2, 2, "F");
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(5, 31, 89);
     if (e.valor > 0) doc.text(String(e.valor), bx + bw / 2, y + alto - bh - 5, { align: "center" });
+
     doc.setFont("helvetica", "normal");
     const etiqueta = etiquetaMesPDF(e.key);
     doc.text(etiqueta[0], bx + bw / 2, y + alto + 12, { align: "center" });
@@ -2597,13 +2631,11 @@ function agregarPieYPaginacionPDF(doc) {
     doc.setDrawColor(220, 38, 38);
     doc.setLineWidth(0.8);
     doc.line(20, h - 30, w - 20, h - 30);
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(7.5);
-    doc.setTextColor(5, 31, 89);
-    doc.text(`“${SEC2_PDF_LEMA}”`, w / 2, h - 16, { align: "center" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
+    doc.setTextColor(5, 31, 89);
     doc.text(`Página ${i}/${total}`, w - 24, 92, { align: "right" });
+    doc.text(`Página ${i}/${total}`, w / 2, h - 14, { align: "center" });
   }
 }
 
