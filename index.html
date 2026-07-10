@@ -340,6 +340,251 @@
       white-space: nowrap;
     }
 
+
+    /* SEC2_FIX_FECHAS_GENERALES_MARGEN_V24_20260710
+       Fechas normales y consulta de fechas: no se salen del marco, mantienen
+       tamaño medio y texto centrado. No afecta Permiso oficial. */
+    .form-row {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      grid-template-columns: 54px minmax(0, 1fr) !important;
+      column-gap: 12px !important;
+      overflow: visible !important;
+    }
+
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha),
+    #rangeFechaInicio,
+    #rangeFechaFin,
+    #formFechaInicio,
+    #formFechaFin {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      height: 56px !important;
+      min-height: 56px !important;
+      max-height: 56px !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+      padding: 0 16px !important;
+      border-radius: 18px !important;
+      font-size: 17px !important;
+      line-height: 56px !important;
+      text-align: center !important;
+      text-align-last: center !important;
+      background: #ffffff !important;
+      overflow: hidden !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+    }
+
+    .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-date-and-time-value,
+    #rangeFechaInicio::-webkit-date-and-time-value,
+    #rangeFechaFin::-webkit-date-and-time-value,
+    #formFechaInicio::-webkit-date-and-time-value,
+    #formFechaFin::-webkit-date-and-time-value {
+      display: block !important;
+      width: 100% !important;
+      height: 56px !important;
+      min-height: 56px !important;
+      line-height: 56px !important;
+      text-align: center !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-datetime-edit,
+    .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-datetime-edit-fields-wrapper,
+    #rangeFechaInicio::-webkit-datetime-edit,
+    #rangeFechaInicio::-webkit-datetime-edit-fields-wrapper,
+    #rangeFechaFin::-webkit-datetime-edit,
+    #rangeFechaFin::-webkit-datetime-edit-fields-wrapper,
+    #formFechaInicio::-webkit-datetime-edit,
+    #formFechaInicio::-webkit-datetime-edit-fields-wrapper,
+    #formFechaFin::-webkit-datetime-edit,
+    #formFechaFin::-webkit-datetime-edit-fields-wrapper {
+      display: block !important;
+      width: 100% !important;
+      height: 56px !important;
+      min-height: 56px !important;
+      line-height: 56px !important;
+      text-align: center !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    @media (max-width: 430px) {
+      .form-row {
+        grid-template-columns: 48px minmax(0, 1fr) !important;
+        column-gap: 10px !important;
+      }
+
+      .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha),
+      #rangeFechaInicio,
+      #rangeFechaFin,
+      #formFechaInicio,
+      #formFechaFin {
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        line-height: 52px !important;
+        font-size: 16px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        border-radius: 17px !important;
+      }
+
+      .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-date-and-time-value,
+      .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-datetime-edit,
+      .form-row input[type="date"]:not(#fechaOficial1):not(#fechaOficial2):not(#fechaOficial3):not(#uso1Fecha):not(#uso2Fecha):not(#uso3Fecha)::-webkit-datetime-edit-fields-wrapper,
+      #rangeFechaInicio::-webkit-date-and-time-value,
+      #rangeFechaInicio::-webkit-datetime-edit,
+      #rangeFechaInicio::-webkit-datetime-edit-fields-wrapper,
+      #rangeFechaFin::-webkit-date-and-time-value,
+      #rangeFechaFin::-webkit-datetime-edit,
+      #rangeFechaFin::-webkit-datetime-edit-fields-wrapper,
+      #formFechaInicio::-webkit-date-and-time-value,
+      #formFechaInicio::-webkit-datetime-edit,
+      #formFechaInicio::-webkit-datetime-edit-fields-wrapper,
+      #formFechaFin::-webkit-date-and-time-value,
+      #formFechaFin::-webkit-datetime-edit,
+      #formFechaFin::-webkit-datetime-edit-fields-wrapper {
+        height: 52px !important;
+        min-height: 52px !important;
+        line-height: 52px !important;
+      }
+    }
+
+
+    /* SEC2_FIX_ICONOS_UNIFICADOS_TIPO_INCIDENCIA_V25_20260710
+       Unifica iconos de tipo de incidencia: mismos círculos y SVG de la
+       pantalla Seleccionar tipo de incidencia, escalados para tarjetas,
+       resumen y gráfico mensual. */
+    .sec2-type-icon-unified,
+    .incident-avatar,
+    .profile-stat-grid .mini-icon,
+    .stat-small .mini-icon,
+    .sec2-type-bar-icon {
+      border-radius: 999px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex: 0 0 auto !important;
+      overflow: hidden !important;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08) !important;
+      background-clip: padding-box !important;
+    }
+
+    .sec2-type-icon-unified .icon-svg,
+    .incident-avatar .icon-svg,
+    .profile-stat-grid .mini-icon .icon-svg,
+    .stat-small .mini-icon .icon-svg,
+    .sec2-type-bar-icon .icon-svg {
+      width: 58% !important;
+      height: 58% !important;
+      display: block !important;
+      color: #ffffff !important;
+      fill: currentColor !important;
+      stroke: none;
+      overflow: visible !important;
+    }
+
+    .incident-avatar {
+      width: 58px !important;
+      height: 58px !important;
+      min-width: 58px !important;
+      min-height: 58px !important;
+      color: #ffffff !important;
+    }
+
+    .profile-stat-grid .mini-icon,
+    .stat-small .mini-icon {
+      width: 30px !important;
+      height: 30px !important;
+      min-width: 30px !important;
+      min-height: 30px !important;
+      margin-bottom: 5px !important;
+      color: #ffffff !important;
+    }
+
+    .sec2-type-bar-icon {
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      margin: 6px auto 6px !important;
+      color: #ffffff !important;
+    }
+
+    .solid-purple, .mini-icon.solid-purple, .sec2-type-bar-icon.solid-purple { background: #6d28d9 !important; }
+    .solid-blue, .mini-icon.solid-blue, .sec2-type-bar-icon.solid-blue { background: #0b63e5 !important; }
+    .solid-green, .mini-icon.solid-green, .sec2-type-bar-icon.solid-green { background: #159a34 !important; }
+    .solid-orange, .mini-icon.solid-orange, .sec2-type-bar-icon.solid-orange { background: #ff5a1f !important; }
+    .solid-purple-soft, .mini-icon.solid-purple-soft, .sec2-type-bar-icon.solid-purple-soft { background: #8b49df !important; }
+    .solid-blue-soft, .mini-icon.solid-blue-soft, .sec2-type-bar-icon.solid-blue-soft { background: #2f80ed !important; }
+    .solid-gold, .mini-icon.solid-gold, .sec2-type-bar-icon.solid-gold { background: #bf8c24 !important; }
+
+    .color-purple.sec2-type-icon-unified,
+    .mini-icon.color-purple,
+    .sec2-type-bar-icon.color-purple { background: #6d28d9 !important; color: #ffffff !important; }
+    .color-blue.sec2-type-icon-unified,
+    .mini-icon.color-blue,
+    .sec2-type-bar-icon.color-blue { background: #0b63e5 !important; color: #ffffff !important; }
+    .color-green.sec2-type-icon-unified,
+    .mini-icon.color-green,
+    .sec2-type-bar-icon.color-green { background: #159a34 !important; color: #ffffff !important; }
+    .color-orange.sec2-type-icon-unified,
+    .mini-icon.color-orange,
+    .sec2-type-bar-icon.color-orange { background: #ff5a1f !important; color: #ffffff !important; }
+    .color-purple-soft.sec2-type-icon-unified,
+    .mini-icon.color-purple-soft,
+    .sec2-type-bar-icon.color-purple-soft { background: #8b49df !important; color: #ffffff !important; }
+    .color-blue-soft.sec2-type-icon-unified,
+    .mini-icon.color-blue-soft,
+    .sec2-type-bar-icon.color-blue-soft { background: #2f80ed !important; color: #ffffff !important; }
+    .color-gold.sec2-type-icon-unified,
+    .mini-icon.color-gold,
+    .sec2-type-bar-icon.color-gold { background: #bf8c24 !important; color: #ffffff !important; }
+
+    .incident-card .incident-avatar + .person-avatar {
+      margin-left: -10px;
+    }
+
+    @media (max-width: 430px) {
+      .incident-avatar {
+        width: 54px !important;
+        height: 54px !important;
+        min-width: 54px !important;
+        min-height: 54px !important;
+      }
+
+      .profile-stat-grid .mini-icon,
+      .stat-small .mini-icon {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+      }
+
+      .sec2-type-bar-icon {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+      }
+    }
+
   </style>
 </head>
 
