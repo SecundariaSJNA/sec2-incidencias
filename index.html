@@ -88,6 +88,51 @@
         font-size: 9.5px;
       }
     }
+
+
+    /* SEC2_FIX_PERMISO_OFICIAL_LAYOUT_V14_20260709 */
+    #formPermisoOficial .sub-card {
+      overflow: hidden;
+      box-sizing: border-box;
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+
+    #formPermisoOficial .official-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      align-items: start;
+      margin: 12px 0 16px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    #formPermisoOficial .official-row input[type="date"] {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      height: 58px;
+      padding-left: 16px;
+      padding-right: 16px;
+      font-size: 18px;
+    }
+
+    #formPermisoOficial .official-label {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      line-height: 1.25;
+    }
+
+    @media (min-width: 520px) {
+      #formPermisoOficial .official-row {
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+    }
   </style>
 </head>
 
