@@ -1,4 +1,4 @@
-/* SEC2_APP_V13_ELIMINAR_REGRESA_DOCENTE_TITULO_DOCENTE_20260709 */
+/* SEC2_APP_V17_REGLAS_DIAS_HABILES_USOS_BACK_PERFIL_20260710 */
 const TEST_USERS = {
   "Direccion": "D001",
   "Correspondencia": "C001",
@@ -1156,8 +1156,23 @@ function guardarEdicionUso() {
   };
   
   API.guardarUsosPermisoOficial(selectedIncidentID, datos, function() {
-    status.className = "status-box show ok"; status.textContent = "Cambios guardados correctamente.";
-    setTimeout(function() { abrirDetalleIncidencia(selectedIncidentID); }, 800);
+    status.className = "status-box show ok";
+    status.textContent = "Cambios guardados correctamente.";
+
+    // SEC2_FIX_USOS_OFICIALES_GUARDAR_REGRESA_PERFIL_V17_20260710
+    // Al guardar usos pendientes, no volver al detalle del permiso oficial.
+    // Regresar al resumen del docente para evitar bucle detalle → editar → detalle.
+    const personaDestino = selectedDetailPersonID || selectedPersonID || "";
+    setTimeout(function() {
+      detailBackOverride = "";
+      navigationStack = [];
+      if (personaDestino) {
+        profileMode = false;
+        cargarResumenPersona(personaDestino, false);
+      } else {
+        goMain();
+      }
+    }, 800);
   }, function(error) {
     status.className = "status-box show error"; status.textContent = obtenerMensajeError(error);
   });
@@ -1699,7 +1714,7 @@ function construirEstadisticaMensualDesdeHistorial(respuesta, mes, anio) {
       ].map(parseFechaLocal).filter(Boolean);
 
       const diasOficialesMes = fechasOficiales.filter(function(fecha) {
-        return fecha >= inicioMes && fecha <= finMes;
+        return fecha >= inicioMes && fecha <= finMes && esDiaHabil(fecha);
       }).length;
 
       if (diasOficialesMes > 0 && tipos[clave]) {
@@ -1718,7 +1733,8 @@ function construirEstadisticaMensualDesdeHistorial(respuesta, mes, anio) {
 
     const desde = fechaInicio < inicioMes ? inicioMes : fechaInicio;
     const hasta = fechaFin > finMes ? finMes : fechaFin;
-    const dias = Math.max(1, Math.round((hasta - desde) / 86400000) + 1);
+    const dias = contarDiasHabilesEntre(desde, hasta);
+    if (dias <= 0) return;
 
     if (tipos[clave]) {
       tipos[clave].incidencias += 1;
