@@ -1,4 +1,5 @@
-/* SEC2_APP_V28_HISTORIAL_PDF_COMPLETO_20260710 */
+/* SEC2_APP_V29_HISTORIAL_PDF_PREFECTURA_ARC_FIX_20260710 */
+/* Base: V28 + PDF visible en Historial General para Dirección/Prefectura/Correspondencia + fix doc.arc */
 /* Base: V27 + botón Historial en PDF y generación PDF en teléfono */
 /* Base funcional: V26, sin cambios lógicos; ajustes visuales van en index V28 */
 /* Base: V25 + iconos miniatura corregidos */
@@ -2094,7 +2095,7 @@ const SEC2_PDF_LEMA = "Formación académica integral, comunitaria y humanista";
 
 function debeMostrarBotonPDFHistorial() {
   const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
-  return !profileMode && (rol === "Direccion" || rol === "Correspondencia");
+  return !profileMode && (rol === "Direccion" || rol === "Prefectura" || rol === "Correspondencia");
 }
 
 async function generarHistorialPDFDocente() {
@@ -2519,9 +2520,14 @@ function dibujarIconoTipoPDF(doc, clave, color, x, y, s) {
   }
   if (clave === "humanitarioOficial") {
     doc.ellipse(x + s * 0.50, y + s * 0.48, s * 0.42, s * 0.30, "F");
+    // jsPDF 2.x no tiene doc.arc() en todos los navegadores móviles.
+    // Se dibuja la sonrisa con dos líneas redondeadas para evitar error en iPhone/Android.
     doc.setDrawColor(255, 255, 255);
     doc.setLineWidth(Math.max(1.5, s * 0.13));
-    doc.arc(x + s * 0.50, y + s * 0.44, s * 0.22, s * 0.18, 20, 160);
+    if (typeof doc.setLineCap === "function") doc.setLineCap("round");
+    doc.line(x + s * 0.30, y + s * 0.50, x + s * 0.43, y + s * 0.61);
+    doc.line(x + s * 0.43, y + s * 0.61, x + s * 0.70, y + s * 0.48);
+    if (typeof doc.setLineCap === "function") doc.setLineCap("butt");
     return;
   }
   if (clave === "comisionSindical") {
