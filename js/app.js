@@ -1226,7 +1226,7 @@ function eliminarIncidenciaActual() {
   });
 }
 
-function crearCardIncidencia(i, mostrarDetalleBtn = true) {
+function crearCardIncidencia(i, mostrarDetalleBtn = true, opciones = {}) {
   const meta = iconMeta(i.TipoIncidencia); const card = document.createElement("article");
   card.className = "incident-card";
   
@@ -1236,7 +1236,7 @@ function crearCardIncidencia(i, mostrarDetalleBtn = true) {
     <div>
       <h3 class="incident-name">${escapeHTML(i.Nombre)} ${escapeHTML(i.Apellidos)}</h3>
       <p class="incident-detail"><strong>Tipo:</strong> ${escapeHTML(i.TipoIncidencia || "Incidencia")}</p>
-      <p class="incident-detail"><strong>Periodo:</strong> ${formatearFecha(i.FechaInicio)} al ${formatearFecha(i.FechaFin)}</p>
+      ${opciones.ocultarPeriodo ? "" : `<p class="incident-detail"><strong>Periodo:</strong> ${formatearFecha(i.FechaInicio)} al ${formatearFecha(i.FechaFin)}</p>`}
     </div>
   `;
   if (mostrarDetalleBtn) {
@@ -1642,7 +1642,7 @@ function renderListaIncidencias(incidencias) {
   inicializarIconos();
 }
 
-// SEC2_FIX_REPORTES_SIN_DETALLE_SEPARADORES_5_HABILES_V19_20260710
+// SEC2_FIX_REPORTES_SIN_DETALLE_SIN_PERIODO_ORDEN_FECHA_V21_20260710
 function renderListaReportePorDia(incidencias, opciones = {}) {
   const container = document.getElementById("dataList");
   container.innerHTML = "";
@@ -1679,7 +1679,7 @@ function renderListaReportePorDia(incidencias, opciones = {}) {
 
     delDia.forEach(function(incidencia) {
       // En reportes operativos no se muestra Ver detalle para ningún rol.
-      container.appendChild(crearCardIncidencia(incidencia, false));
+      container.appendChild(crearCardIncidencia(incidencia, false, { ocultarPeriodo: true }));
     });
   });
 
@@ -1728,7 +1728,7 @@ function normalizarFechaISO(fecha) {
   return texto.slice(0, 10);
 }
 
-// SEC2_FIX_REPORTES_BANNER_FECHA_FINOS_V20_20260710
+// SEC2_FIX_REPORTES_BANNER_FECHA_AZUL_FINOS_V21_20260710
 function crearSeparadorFechaReporte(fechaISO) {
   const partes = obtenerPartesSeparadorFechaReporte(fechaISO);
 
