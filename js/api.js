@@ -1,6 +1,6 @@
 /* =========================================================
-   SEC2 API — Supabase V10
-   SEC2_API_V10_RPC_GUARDAR_DETALLE_ELIMINAR_20260709
+   SEC2 API — Supabase V11
+   SEC2_API_V11_PERMISO_OFICIAL_USOS_20260709
    Compatible con app.js actual
    ========================================================= */
 
@@ -231,6 +231,28 @@ const SEC2_API = (() => {
     return fila;
   }
 
+  async function guardarUsosPermisoOficialAsync(idIncidencia, datos) {
+    const resultado = await rpc("guardar_usos_permiso_oficial_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_incidencia: normalizarTexto(idIncidencia),
+      p_uso_1_fecha: valorFechaONull(datos.Uso1Fecha),
+      p_uso_2_fecha: valorFechaONull(datos.Uso2Fecha),
+      p_uso_3_fecha: valorFechaONull(datos.Uso3Fecha)
+    });
+
+    const fila = extraerRespuestaRpc(resultado);
+
+    if (!fila) {
+      throw new Error("No se recibió respuesta de Supabase al guardar usos de permiso oficial.");
+    }
+
+    if (fila.success === false) {
+      throw new Error(fila.error || "No fue posible guardar los usos del permiso oficial.");
+    }
+
+    return fila;
+  }
+
   return {
     rpc,
     iniciarSesionAsync,
@@ -243,7 +265,8 @@ const SEC2_API = (() => {
     obtenerEstadisticaMensualAsync,
     guardarIncidenciaAsync,
     obtenerDetalleIncidenciaAsync,
-    eliminarIncidenciaAsync
+    eliminarIncidenciaAsync,
+    guardarUsosPermisoOficialAsync
   };
 })();
 
@@ -333,7 +356,9 @@ const API = {
   },
 
   guardarUsosPermisoOficial: function(idIncidencia, datos, onSuccess, onFailure) {
-    if (typeof onFailure === "function") onFailure("Uso de permisos oficiales aún no migrado a Supabase.");
+    SEC2_API.guardarUsosPermisoOficialAsync(idIncidencia, datos)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
   eliminarIncidencia: function(idIncidencia, onSuccess, onFailure) {
