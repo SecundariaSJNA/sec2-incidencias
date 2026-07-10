@@ -1,13 +1,3 @@
-/* SEC2_APP_V31_PDF_ENCABEZADO_SEP_CT_20260710 */
-/* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
-/* Base: V29 + PDF gráfico por meses centrado cuando hay pocos meses */
-/* Base: V28 + PDF visible en Historial General para Dirección/Prefectura/Correspondencia + fix doc.arc */
-/* Base: V27 + botón Historial en PDF y generación PDF en teléfono */
-/* Base funcional: V26, sin cambios lógicos; ajustes visuales van en index V28 */
-/* Base: V25 + iconos miniatura corregidos */
-/* SEC2_APP_V24_ICONOS_UNIFICADOS_TIPO_INCIDENCIA_20260710 */
-/* SEC2_APP_V17_REGLAS_DIAS_HABILES_USOS_BACK_PERFIL_20260710 */
-/* SEC2_APP_V18_FECHAS_MMM_BACK_PERFIL_ORDEN_DIRECCION_20260710 */
 const TEST_USERS = {
   "Direccion": "D001",
   "Correspondencia": "C001",
