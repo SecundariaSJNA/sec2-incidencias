@@ -1136,7 +1136,9 @@ function guardarEdicionUso() {
   status.className = "status-box show"; status.textContent = "Guardando cambios...";
   
   const datos = {
-    Uso1Fecha: valorInput("editUso1"), Uso2Fecha: valorInput("editUso2"), Uso3Fecha: valorInput("editUso3")
+    Uso1Fecha: valorInputEditable("editUso1"),
+    Uso2Fecha: valorInputEditable("editUso2"),
+    Uso3Fecha: valorInputEditable("editUso3")
   };
   
   API.guardarUsosPermisoOficial(selectedIncidentID, datos, function() {
@@ -1149,6 +1151,12 @@ function guardarEdicionUso() {
 
 function valorInput(id) {
   const el = document.getElementById(id); return el ? el.value : "";
+}
+
+function valorInputEditable(id) {
+  const el = document.getElementById(id);
+  if (!el || el.disabled) return "";
+  return el.value || "";
 }
 
 function eliminarIncidenciaActual() {
@@ -1408,7 +1416,7 @@ function abrirFormularioIncidencia(tipo) {
   }
 
   showScreen("formScreen");
-  document.getElementById("formInfoText").textContent = tipo.oficial ? "El permiso oficial calcula el rango según las fechas oficiales." : "La fecha de inicio y fin pueden ser el mismo día.";
+  document.getElementById("formInfoText").textContent = tipo.oficial ? "El permiso oficial requiere tres fechas oficiales. Las fechas de uso pueden quedar pendientes y asignarse después." : "La fecha de inicio y fin pueden ser el mismo día.";
 }
 
 function guardarFormulario() {
@@ -1422,16 +1430,57 @@ function guardarFormulario() {
 
   if (!usrIDUsuario) { alert("Selecciona un docente afectado."); return; }
 
+  const fechasOficiales = [
+    valorInput("fechaOficial1"),
+    valorInput("fechaOficial2"),
+    valorInput("fechaOficial3")
+  ].filter(function(fecha) { return Boolean(fecha); }).sort();
+
+  let fechaInicio = valorInput("formFechaInicio");
+  let fechaFin = valorInput("formFechaFin");
+
+  if (selectedType && selectedType.oficial) {
+    if (fechasOficiales.length !== 3) {
+      mostrarEstadoFormulario("El permiso oficial debe tener exactamente tres fechas oficiales autorizadas.", true, false);
+      return;
+    }
+
+    fechaInicio = fechasOficiales[0];
+    fechaFin = fechasOficiales[fechasOficiales.length - 1];
+  } else {
+    if (!fechaInicio) {
+      mostrarEstadoFormulario("La fecha de inicio es obligatoria.", true, false);
+      return;
+    }
+
+    if (!fechaFin) {
+      mostrarEstadoFormulario("La fecha fin es obligatoria.", true, false);
+      return;
+    }
+  }
+
+  if (fechaInicio && fechaFin && fechaInicio > fechaFin) {
+    mostrarEstadoFormulario("La fecha de inicio no puede ser posterior a la fecha fin.", true, false);
+    return;
+  }
+
   const datos = {
-    IDUsuario: usrIDUsuario, TipoIncidencia: selectedType.nombre,
-    FechaInicio: valorInput("formFechaInicio"), FechaFin: valorInput("formFechaFin"),
-    FechaOficial1: valorInput("fechaOficial1"), FechaOficial2: valorInput("fechaOficial2"),
-    FechaOficial3: valorInput("fechaOficial3"), Uso1Fecha: valorInput("uso1Fecha"),
-    Uso2Fecha: valorInput("uso2Fecha"), Uso3Fecha: valorInput("uso3Fecha"),
-    LicenciaMedica: valorInput("formLicencia"), Observaciones: valorInput("formObservaciones"),
+    IDUsuario: usrIDUsuario,
+    TipoIncidencia: selectedType.nombre,
+    FechaInicio: fechaInicio,
+    FechaFin: fechaFin,
+    FechaOficial1: valorInput("fechaOficial1"),
+    FechaOficial2: valorInput("fechaOficial2"),
+    FechaOficial3: valorInput("fechaOficial3"),
+    Uso1Fecha: valorInput("uso1Fecha"),
+    Uso2Fecha: valorInput("uso2Fecha"),
+    Uso3Fecha: valorInput("uso3Fecha"),
+    LicenciaMedica: valorInput("formLicencia"),
+    Observaciones: valorInput("formObservaciones"),
     RegistradoPor: usuarioIDAcceso
   };
 
+  // SEC2_FIX_PERMISO_OFICIAL_3_FECHAS_USOS_EDITABLES_V15_20260709
   // SEC2_FIX_DETALLE_REGRESO_A_TIPOS_20260709
   // SEC2_FIX_GUARDAR_SIN_SPLASH_20260709
   // No cambiar de pantalla aquí. El estado debe verse dentro del formulario.
