@@ -786,8 +786,11 @@ function abrirDetalleIncidencia(idIncidencia) {
 }
 
 function renderDetalleIncidencia(respuesta) {
-  const i = respuesta.incidencia; const meta = iconMeta(i.TipoIncidencia);
-  const andPuedeEditar = respuesta.puedeEditar; const andPuedeEliminar = respuesta.puedeEliminar;
+  const i = respuesta.incidencia || {};
+  const meta = iconMeta(i.TipoIncidencia);
+  const andPuedeEditar = respuesta.puedeEditar;
+  const andPuedeEliminar = respuesta.puedeEliminar;
+  const folioVisible = obtenerFolioVisibleIncidencia(i);
 
   document.getElementById("detailBrandIcon").className = `brand-icon solid-${meta.color}`;
   document.getElementById("detailBrandIcon").setAttribute("data-icon", meta.icono);
@@ -798,16 +801,15 @@ function renderDetalleIncidencia(respuesta) {
         <div class="mini-icon solid-${meta.color}" data-icon="${meta.icono}"></div>
         <div>
           <h2 class="data-card-title color-${meta.color}">${escapeHTML(i.TipoIncidencia || meta.name)}</h2>
-          <p class="data-card-text"><strong>ID Incidencia:</strong> ${escapeHTML(i.IDIncidencia)}</p>
-          <span class="tag" style="background:${cssVar('green')};">Activo</span>
+          ${folioVisible ? `<p class="data-card-text"><strong>Folio:</strong> ${escapeHTML(folioVisible)}</p>` : ""}
+          <span class="tag" style="background:${cssVar('green')};">${escapeHTML(i.Estado || "Activo")}</span>
         </div>
       </div>
     </article>
     <article class="data-card">
       <h2 class="section-title">Docente</h2>
       <p class="data-card-text"><strong>${escapeHTML(i.Nombre)} ${escapeHTML(i.Apellidos)}</strong></p>
-      <p class="data-card-text"><strong>ID de Acceso:</strong> ${escapeHTML(i.IDUsuario)}</p>
-      <p class="data-card-text"><strong>Turno:</strong> ${TURNOS_TEXTO[i.Turno] || i.Turno}</p>
+      <p class="data-card-text"><strong>Turno:</strong> ${TURNOS_TEXTO[i.Turno] || i.Turno || "Sin dato"}</p>
     </article>
   `;
 
@@ -838,9 +840,9 @@ function renderDetalleIncidencia(respuesta) {
       <p class="data-card-text">${escapeHTML(i.Observaciones || "Sin observaciones.")}</p>
     </article>
     <article class="data-card">
-      <h2 class="section-title">Registrado por (Sello de Auditoría ID)</h2>
+      <h2 class="section-title">Detalles</h2>
       <p class="data-card-text"><strong>Sello:</strong> ${escapeHTML(i.RegistradoPor || "Sin dato")}</p>
-      <p class="data-card-text"><strong>Fecha de captura:</strong> ${formatearFecha(i.FechaRegistro)}</p>
+      <p class="data-card-text"><strong>Fecha de captura:</strong> ${formatearFechaHoraDetalle(i.FechaRegistro || i.CreatedAt)}</p>
     </article>
   `;
 
@@ -862,7 +864,51 @@ function renderDetalleIncidencia(respuesta) {
       <button class="logout-fake" onclick="cerrarSesion()">Cerrar<br>sesión</button>
     </section>
   `;
-  document.getElementById("detailContent").innerHTML = html; inicializarIconos();
+  document.getElementById("detailContent").innerHTML = html;
+  inicializarIconos();
+}
+
+function obtenerFolioVisibleIncidencia(incidencia) {
+  const folio = incidencia.Folio || incidencia.folio || "";
+  if (folio) return folio;
+
+  const id = incidencia.IDIncidencia || incidencia.idIncidencia || incidencia.id || "";
+  if (!id) return "";
+
+  // No mostrar UUID largo como folio visual.
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id))) {
+    return "";
+  }
+
+  return id;
+}
+
+function formatearFechaHoraDetalle(valor) {
+  if (!valor) return "Sin fecha";
+
+  const texto = String(valor);
+  const fecha = new Date(texto);
+
+  if (!Number.isNaN(fecha.getTime())) {
+    try {
+      return fecha.toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch (error) {
+      return fecha.toLocaleString();
+    }
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    const partes = texto.slice(0, 10).split("-");
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  }
+
+  return texto;
 }
 
 function renderDetallePermisoOficial(i) {
