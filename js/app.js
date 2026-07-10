@@ -1,3 +1,4 @@
+/* SEC2_APP_V24_ICONOS_UNIFICADOS_TIPO_INCIDENCIA_20260710 */
 /* SEC2_APP_V17_REGLAS_DIAS_HABILES_USOS_BACK_PERFIL_20260710 */
 /* SEC2_APP_V18_FECHAS_MMM_BACK_PERFIL_ORDEN_DIRECCION_20260710 */
 const TEST_USERS = {
@@ -717,7 +718,7 @@ function statMini(num, label, color, icono, statKey) {
   const attr = statKey ? ` data-profile-stat="${statKey}"` : "";
   return `
     <article class="stat-small bg-${color}">
-      <div class="mini-icon color-${color}" data-icon="${icono}"></div>
+      <div class="mini-icon solid-${color} sec2-type-icon-unified" data-icon="${icono}"></div>
       <div class="stat-num color-${color}"${attr}>${numeroEnteroSeguro(num)}</div>
       <div class="stat-label">${label}</div>
     </article>
@@ -1231,7 +1232,7 @@ function crearCardIncidencia(i, mostrarDetalleBtn = true, opciones = {}) {
   card.className = "incident-card";
   
   let html = `
-    <div class="incident-avatar solid-${meta.color}" data-icon="${meta.icono}"></div>
+    <div class="incident-avatar solid-${meta.color} sec2-type-icon-unified" data-icon="${meta.icono}"></div>
     <div class="person-avatar" data-icon="user"></div>
     <div>
       <h3 class="incident-name">${escapeHTML(i.Nombre)} ${escapeHTML(i.Apellidos)}</h3>
@@ -2058,7 +2059,7 @@ function barraTipoEstadistica(item, maxDias) {
     <article class="sec2-type-bar-item">
       <div class="sec2-type-bar-value">${item.dias > 0 ? item.dias : ""}</div>
       <div class="sec2-type-bar solid-${item.color}" style="height:${altura}px;"></div>
-      <div class="sec2-type-bar-icon color-${item.color}" data-icon="${item.icono}"></div>
+      <div class="sec2-type-bar-icon solid-${item.color} sec2-type-icon-unified" data-icon="${item.icono}"></div>
       <div class="sec2-type-bar-label">${escapeHTML(item.nombre)}</div>
     </article>
   `;
