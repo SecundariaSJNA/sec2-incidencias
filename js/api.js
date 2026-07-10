@@ -1,12 +1,7 @@
 /* =========================================================
-   SEC2 API — Supabase V7
-   Capa compatible con app.js / incidencias.js / reportes.js
-
-   Cambio V7:
-   - Guarda incidencias usando el esquema real normalizado de Supabase.
-   - public.incidencias usa: id, folio, usuario_id, tipo_incidencia_id, estado_id,
-     fecha_inicio, fecha_fin, licencia_medica, observaciones, registrado_por_id, fecha_registro.
-   - Resuelve IDAcceso a usuarios.id y TipoIncidencia a tipos_incidencia.id.
+   SEC2 API — Supabase V9
+   SEC2_API_V9_RPC_GUARDAR_Y_DETALLE_INCIDENCIA_20260709
+   Compatible con app.js actual
    ========================================================= */
 
 const SEC2_API = (() => {
@@ -32,16 +27,6 @@ const SEC2_API = (() => {
     return valor === null || valor === undefined ? "" : String(valor).trim();
   }
 
-  function valorONull(valor) {
-    const texto = normalizarTexto(valor);
-    return texto ? texto : null;
-  }
-
-  function fechaONull(valor) {
-    const texto = normalizarTexto(valor);
-    return texto ? texto : null;
-  }
-
   function normalizarRolFrontend(rolClave) {
     const clave = normalizarTexto(rolClave).toLowerCase();
 
@@ -57,152 +42,55 @@ const SEC2_API = (() => {
     return sessionStorage.getItem("userIDAcceso") || "";
   }
 
-  function generarIDIncidenciaTemporal() {
-    const fecha = new Date();
-    const yyyy = fecha.getFullYear();
-    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
-    const dd = String(fecha.getDate()).padStart(2, "0");
-    const hh = String(fecha.getHours()).padStart(2, "0");
-    const mi = String(fecha.getMinutes()).padStart(2, "0");
-    const ss = String(fecha.getSeconds()).padStart(2, "0");
-    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `INC-${yyyy}${mm}${dd}-${hh}${mi}${ss}-${rand}`;
+  function valorFechaONull(valor) {
+    const texto = normalizarTexto(valor);
+    return texto ? texto : null;
   }
 
-  function esPermisoOficial(datos) {
-    const tipo = normalizarTexto(datos && datos.TipoIncidencia).toLowerCase();
-    return tipo === "permiso oficial";
+  function extraerRespuestaRpc(resultado) {
+    const fila = Array.isArray(resultado) ? resultado[0] : resultado;
+    return fila || null;
   }
 
-  function normalizarIncidenciaParaRPC(datos) {
-    const d = datos || {};
-    const oficial = esPermisoOficial(d);
-
-    /*
-      SEC2_FIX_RPC_GUARDAR_V5_20260709
-      La función RPC aún no existe en Supabase o no coincide con la firma.
-      Usamos una firma mínima para no seguir enviando parámetros de columnas
-      que el esquema real no tiene: fecha_oficial_1/2/3 ni uso_1/2/3.
-    */
-    return {
-      p_id_acceso_sesion: idSesion(),
-      p_id_acceso_persona: normalizarTexto(d.IDUsuario),
-      p_tipo_incidencia: normalizarTexto(d.TipoIncidencia),
-      p_fecha_inicio: oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio),
-      p_fecha_fin: oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin),
-      p_licencia_medica: valorONull(d.LicenciaMedica),
-      p_observaciones: valorONull(d.Observaciones),
-      p_registrado_por: normalizarTexto(d.RegistradoPor || idSesion())
-    };
-  }
-
-  function validarDatosIncidencia(datos) {
-    const d = datos || {};
-
-    if (!normalizarTexto(d.IDUsuario)) {
-      throw new Error("Seleccione el docente afectado.");
-    }
-
-    if (!normalizarTexto(d.TipoIncidencia)) {
-      throw new Error("Seleccione el tipo de incidencia.");
-    }
-
-    if (esPermisoOficial(d)) {
-      if (!fechaONull(d.FechaOficial1) && !fechaONull(d.FechaOficial2) && !fechaONull(d.FechaOficial3)) {
-        throw new Error("Capture al menos una fecha oficial autorizada.");
-      }
-      return;
-    }
-
-    if (!fechaONull(d.FechaInicio) || !fechaONull(d.FechaFin)) {
-      throw new Error("Capture fecha inicio y fecha fin.");
-    }
-
-    if (fechaONull(d.FechaInicio) > fechaONull(d.FechaFin)) {
-      throw new Error("La fecha inicio no puede ser posterior a la fecha fin.");
-    }
-  }
-
-  function normalizarRespuestaGuardado(respuesta, idRespaldo) {
-    const fila = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+  function normalizarRespuestaGuardado(resultado) {
+    const fila = extraerRespuestaRpc(resultado);
 
     if (!fila) {
-      return {
-        success: true,
-        IDIncidencia: idRespaldo,
-        incidencia: { IDIncidencia: idRespaldo }
-      };
+      throw new Error("No se recibió respuesta de Supabase al guardar la incidencia.");
     }
 
     if (fila.success === false) {
       throw new Error(fila.error || "No fue posible guardar la incidencia.");
     }
 
-    const id = fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || idRespaldo;
+    const id = fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || fila.Folio || fila.folio;
 
     return {
       success: true,
       IDIncidencia: id,
-      incidencia: Object.assign({}, fila, { IDIncidencia: id })
+      idIncidencia: id,
+      id_incidencia: id,
+      Folio: fila.Folio || fila.folio || "",
+      folio: fila.folio || fila.Folio || "",
+      raw: fila
     };
   }
 
-  function normalizarIncidenciaDesdeBD(fila) {
-    if (!fila) return null;
-
-    const usuario = fila.usuarios || fila.usuario || fila.usuario_detalle || {};
-    const tipo = fila.tipos_incidencia || fila.tipo_incidencia || fila.tipo || {};
-    const estado = fila.estados_incidencia || fila.estado || {};
-    const registrador = fila.registrador || fila.registrado_por || fila.registrado_por_usuario || {};
-
-    const apellidosUsuario = usuario.Apellidos || usuario.apellidos || [usuario.apellido_paterno, usuario.apellido_materno].filter(Boolean).join(" ");
-    const apellidosRegistrador = registrador.Apellidos || registrador.apellidos || [registrador.apellido_paterno, registrador.apellido_materno].filter(Boolean).join(" ");
-
-    return {
-      IDIncidencia: fila.IDIncidencia || fila.idIncidencia || fila.id_incidencia || fila.incidencia_id || fila.id || fila.folio || "",
-      IDUsuario: fila.IDUsuario || fila.idUsuario || fila.id_usuario || fila.id_acceso_persona || usuario.id_acceso || usuario.IDAcceso || fila.usuario_id || "",
-      Nombre: fila.Nombre || fila.nombre || fila.usuario_nombre || usuario.nombre || usuario.Nombre || "",
-      Apellidos: fila.Apellidos || fila.apellidos || fila.usuario_apellidos || apellidosUsuario || "",
-      Correo: fila.Correo || fila.correo || usuario.correo || usuario.Correo || "",
-      Rol: fila.Rol || fila.rol || usuario.rol || usuario.Rol || "",
-      Turno: fila.Turno || fila.turno || fila.turno_clave || usuario.turno_clave || usuario.Turno || "",
-      TipoIncidencia: fila.TipoIncidencia || fila.tipoIncidencia || fila.tipo_incidencia || tipo.nombre || tipo.Nombre || tipo.clave || tipo.Clave || "",
-      FechaInicio: fila.FechaInicio || fila.fechaInicio || fila.fecha_inicio || "",
-      FechaFin: fila.FechaFin || fila.fechaFin || fila.fecha_fin || "",
-      LicenciaMedica: fila.LicenciaMedica || fila.licenciaMedica || fila.licencia_medica || "",
-      Observaciones: fila.Observaciones || fila.observaciones || "",
-      RegistradoPor: fila.RegistradoPor || fila.registradoPor || fila.registrado_por || registrador.id_acceso || registrador.IDAcceso || apellidosRegistrador || fila.registrado_por_id || "",
-      FechaRegistro: fila.FechaRegistro || fila.fechaRegistro || fila.fecha_registro || fila.created_at || "",
-      Estado: fila.Estado || fila.estado || estado.nombre || estado.Nombre || estado.clave || estado.Clave || "Activa",
-      FechaOficial1: fila.FechaOficial1 || fila.fechaOficial1 || fila.fecha_oficial_1 || "",
-      FechaOficial2: fila.FechaOficial2 || fila.fechaOficial2 || fila.fecha_oficial_2 || "",
-      FechaOficial3: fila.FechaOficial3 || fila.fechaOficial3 || fila.fecha_oficial_3 || "",
-      Uso1Fecha: fila.Uso1Fecha || fila.uso1Fecha || fila.uso_1_fecha || "",
-      Uso2Fecha: fila.Uso2Fecha || fila.uso2Fecha || fila.uso_2_fecha || "",
-      Uso3Fecha: fila.Uso3Fecha || fila.uso3Fecha || fila.uso_3_fecha || "",
-      Uso1Estado: fila.Uso1Estado || fila.uso1Estado || fila.uso_1_estado || "Pendiente",
-      Uso2Estado: fila.Uso2Estado || fila.uso2Estado || fila.uso_2_estado || "Pendiente",
-      Uso3Estado: fila.Uso3Estado || fila.uso3Estado || fila.uso_3_estado || "Pendiente"
-    };
-  }
-
-  function normalizarRespuestaDetalle(respuesta) {
-    const fila = Array.isArray(respuesta) ? respuesta[0] : respuesta;
+  function normalizarRespuestaDetalle(resultado) {
+    const fila = extraerRespuestaRpc(resultado);
 
     if (!fila) {
-      throw new Error("No se encontró la incidencia solicitada.");
+      throw new Error("No se recibió detalle de la incidencia.");
     }
 
     if (fila.success === false) {
-      throw new Error(fila.error || "No fue posible consultar el detalle de la incidencia.");
+      throw new Error(fila.error || "No fue posible obtener el detalle de la incidencia.");
     }
 
-    const incidencia = fila.incidencia ? normalizarIncidenciaDesdeBD(fila.incidencia) : normalizarIncidenciaDesdeBD(fila);
-
     return {
-      incidencia,
-      puedeEditar: Boolean(fila.puedeEditar ?? fila.puede_editar ?? false),
-      puedeEliminar: Boolean(fila.puedeEliminar ?? fila.puede_eliminar ?? false)
+      incidencia: fila.incidencia || fila.Incidencia || fila,
+      puedeEditar: Boolean(fila.puedeEditar || fila.puede_editar),
+      puedeEliminar: Boolean(fila.puedeEliminar || fila.puede_eliminar)
     };
   }
 
@@ -212,20 +100,14 @@ const SEC2_API = (() => {
       p_password: normalizarTexto(contrasena)
     });
 
-    const fila = Array.isArray(resultado) ? resultado[0] : resultado;
+    const fila = extraerRespuestaRpc(resultado);
 
     if (!fila) {
-      return {
-        success: false,
-        error: "No se recibió respuesta del servidor."
-      };
+      return { success: false, error: "No se recibió respuesta del servidor." };
     }
 
     if (!fila.success) {
-      return {
-        success: false,
-        error: fila.error || "No fue posible iniciar sesión."
-      };
+      return { success: false, error: fila.error || "No fue posible iniciar sesión." };
     }
 
     const apellidos = [fila.apellido_paterno, fila.apellido_materno]
@@ -241,7 +123,7 @@ const SEC2_API = (() => {
         Apellidos: apellidos,
         NombreCompleto: fila.nombre_completo,
         Correo: fila.correo,
-        Rol: normalizarRolFrontend(fila.rol_clave),
+        Rol: normalizarRolFrontend(fila.rol_clave || fila.rol_nombre),
         RolNombre: fila.rol_nombre,
         Turno: fila.turno_clave,
         TurnoNombre: fila.turno_nombre,
@@ -300,217 +182,34 @@ const SEC2_API = (() => {
     });
   }
 
-  function normalizarClaveCatalogo(texto) {
-    return normalizarTexto(texto)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-  }
-
-  async function buscarUsuarioPorIDAcceso(idAcceso, etiqueta) {
-    const supabase = getClient();
-    const valor = normalizarTexto(idAcceso);
-
-    if (!valor) {
-      throw new Error(`No se recibió IDAcceso para resolver ${etiqueta}.`);
-    }
-
-    const intentos = [
-      { columna: "id_acceso", valor },
-      { columna: "IDAcceso", valor },
-      { columna: "idacceso", valor },
-      { columna: "id", valor }
-    ];
-
-    const errores = [];
-
-    for (const intento of intentos) {
-      const { data, error } = await supabase
-        .from("usuarios")
-        .select("*")
-        .eq(intento.columna, intento.valor)
-        .maybeSingle();
-
-      if (!error && data) return data;
-      if (error) errores.push(`usuarios.${intento.columna}: ${error.message || error}`);
-    }
-
-    throw new Error(`No se encontró ${etiqueta} en usuarios con IDAcceso ${valor}. ${errores.join(" | ")}`);
-  }
-
-  async function buscarTipoIncidencia(tipoTexto) {
-    const supabase = getClient();
-    const tipo = normalizarTexto(tipoTexto);
-    const clave = normalizarClaveCatalogo(tipo);
-
-    if (!tipo) throw new Error("No se recibió tipo de incidencia.");
-
-    const intentos = [
-      { metodo: "eq", columna: "nombre", valor: tipo },
-      { metodo: "ilike", columna: "nombre", valor: tipo },
-      { metodo: "eq", columna: "clave", valor: clave },
-      { metodo: "eq", columna: "codigo", valor: clave }
-    ];
-
-    const errores = [];
-
-    for (const intento of intentos) {
-      let query = supabase.from("tipos_incidencia").select("*");
-
-      if (intento.metodo === "ilike") query = query.ilike(intento.columna, intento.valor);
-      else query = query.eq(intento.columna, intento.valor);
-
-      const { data, error } = await query.maybeSingle();
-
-      if (!error && data) return data;
-      if (error) errores.push(`tipos_incidencia.${intento.columna}: ${error.message || error}`);
-    }
-
-    throw new Error(`No se encontró el tipo de incidencia: ${tipo}. Revisa tabla tipos_incidencia. ${errores.join(" | ")}`);
-  }
-
-  async function buscarEstadoIncidenciaActivo() {
-    const supabase = getClient();
-
-    const candidatos = ["Activa", "Activo", "Vigente", "Registrada", "Abierta"];
-    const errores = [];
-
-    for (const nombre of candidatos) {
-      const clave = normalizarClaveCatalogo(nombre);
-      const intentos = [
-        { metodo: "eq", columna: "nombre", valor: nombre },
-        { metodo: "ilike", columna: "nombre", valor: nombre },
-        { metodo: "eq", columna: "clave", valor: clave },
-        { metodo: "eq", columna: "codigo", valor: clave }
-      ];
-
-      for (const intento of intentos) {
-        let query = supabase.from("estados_incidencia").select("*");
-        if (intento.metodo === "ilike") query = query.ilike(intento.columna, intento.valor);
-        else query = query.eq(intento.columna, intento.valor);
-
-        const { data, error } = await query.maybeSingle();
-        if (!error && data) return data;
-        if (error) errores.push(`estados_incidencia.${intento.columna}: ${error.message || error}`);
-      }
-    }
-
-    const { data, error } = await supabase.from("estados_incidencia").select("*").limit(1).maybeSingle();
-    if (!error && data) return data;
-    if (error) errores.push(`estados_incidencia.limit(1): ${error.message || error}`);
-
-    throw new Error(`No se pudo resolver estado activo en estados_incidencia. ${errores.join(" | ")}`);
-  }
-
   async function guardarIncidenciaAsync(datos) {
-    validarDatosIncidencia(datos);
-
-    /*
-      SEC2_FIX_RPC_SECURITY_DEFINER_V8_20260709
-      El navegador no debe consultar directamente public.usuarios porque RLS/permisos
-      bloquean la tabla. El guardado se delega a la RPC guardar_incidencia_sec2,
-      creada en Supabase con SECURITY DEFINER.
-    */
-    const d = datos || {};
-    const oficial = esPermisoOficial(d);
-    const fechaInicio = oficial ? fechaONull(d.FechaOficial1 || d.FechaInicio) : fechaONull(d.FechaInicio);
-    const fechaFin = oficial ? fechaONull(d.FechaOficial3 || d.FechaOficial2 || d.FechaOficial1 || d.FechaFin) : fechaONull(d.FechaFin);
-
-    const respuesta = await rpc("guardar_incidencia_sec2", {
+    const resultado = await rpc("guardar_incidencia_sec2", {
       p_id_acceso_sesion: idSesion(),
-      p_id_acceso_persona: normalizarTexto(d.IDUsuario),
-      p_tipo_incidencia: normalizarTexto(d.TipoIncidencia),
-      p_fecha_inicio: fechaInicio,
-      p_fecha_fin: fechaFin,
-      p_licencia_medica: valorONull(d.LicenciaMedica),
-      p_observaciones: valorONull(d.Observaciones),
-      p_registrado_por: normalizarTexto(d.RegistradoPor || idSesion()),
-      p_id_incidencia_respaldo: generarIDIncidenciaTemporal(),
-      p_fecha_oficial_1: fechaONull(d.FechaOficial1),
-      p_fecha_oficial_2: fechaONull(d.FechaOficial2),
-      p_fecha_oficial_3: fechaONull(d.FechaOficial3),
-      p_uso_1_fecha: fechaONull(d.Uso1Fecha),
-      p_uso_2_fecha: fechaONull(d.Uso2Fecha),
-      p_uso_3_fecha: fechaONull(d.Uso3Fecha)
+      p_id_acceso_persona: normalizarTexto(datos.IDUsuario),
+      p_tipo_incidencia: normalizarTexto(datos.TipoIncidencia),
+      p_fecha_inicio: valorFechaONull(datos.FechaInicio),
+      p_fecha_fin: valorFechaONull(datos.FechaFin),
+      p_licencia_medica: normalizarTexto(datos.LicenciaMedica),
+      p_observaciones: normalizarTexto(datos.Observaciones),
+      p_registrado_por: normalizarTexto(datos.RegistradoPor || idSesion()),
+      p_fecha_oficial_1: valorFechaONull(datos.FechaOficial1),
+      p_fecha_oficial_2: valorFechaONull(datos.FechaOficial2),
+      p_fecha_oficial_3: valorFechaONull(datos.FechaOficial3),
+      p_uso_1_fecha: valorFechaONull(datos.Uso1Fecha),
+      p_uso_2_fecha: valorFechaONull(datos.Uso2Fecha),
+      p_uso_3_fecha: valorFechaONull(datos.Uso3Fecha)
     });
 
-    const r = Array.isArray(respuesta) ? respuesta[0] : respuesta;
-
-    if (!r) {
-      throw new Error("Supabase no devolvió respuesta al guardar la incidencia.");
-    }
-
-    if (r.success === false) {
-      throw new Error(r.error || "No fue posible guardar la incidencia.");
-    }
-
-    const idGuardado = r.IDIncidencia || r.idIncidencia || r.id_incidencia || r.id || r.folio;
-
-    return {
-      success: true,
-      IDIncidencia: idGuardado,
-      incidencia: {
-        IDIncidencia: idGuardado,
-        IDUsuario: normalizarTexto(d.IDUsuario),
-        TipoIncidencia: normalizarTexto(d.TipoIncidencia),
-        FechaInicio: fechaInicio,
-        FechaFin: fechaFin,
-        LicenciaMedica: valorONull(d.LicenciaMedica) || "",
-        Observaciones: valorONull(d.Observaciones) || "",
-        RegistradoPor: normalizarTexto(d.RegistradoPor || idSesion())
-      }
-    };
+    return normalizarRespuestaGuardado(resultado);
   }
 
   async function obtenerDetalleIncidenciaAsync(idIncidencia) {
-    const id = normalizarTexto(idIncidencia);
+    const resultado = await rpc("obtener_detalle_incidencia_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_incidencia: normalizarTexto(idIncidencia)
+    });
 
-    if (!id) {
-      throw new Error("ID de incidencia no válido.");
-    }
-
-    try {
-      const respuesta = await rpc("obtener_detalle_incidencia_sec2", {
-        p_id_acceso_sesion: idSesion(),
-        p_id_incidencia: id
-      });
-      return normalizarRespuestaDetalle(respuesta);
-    } catch (errorRPC) {
-      return await obtenerDetalleIncidenciaFallbackDirecto(id, errorRPC);
-    }
-  }
-
-  async function obtenerDetalleIncidenciaFallbackDirecto(idIncidencia, errorRPC) {
-    const supabase = getClient();
-    const intentos = [
-      { columna: "id", valor: idIncidencia },
-      { columna: "folio", valor: idIncidencia }
-    ];
-
-    const errores = [];
-
-    for (const intento of intentos) {
-      const { data, error } = await supabase
-        .from("incidencias")
-        .select("*, usuarios:usuario_id(*), tipos_incidencia:tipo_incidencia_id(*), estados_incidencia:estado_id(*), registrador:registrado_por_id(*)")
-        .eq(intento.columna, intento.valor)
-        .maybeSingle();
-
-      if (!error && data) {
-        return {
-          incidencia: normalizarIncidenciaDesdeBD(data),
-          puedeEditar: false,
-          puedeEliminar: false
-        };
-      }
-
-      if (error) errores.push(`incidencias.${intento.columna}: ${error.message || error}`);
-    }
-
-    const mensajeRPC = errorRPC && errorRPC.message ? errorRPC.message : "RPC obtener_detalle_incidencia_sec2 no disponible.";
-    throw new Error(`${mensajeRPC} / Fallback directo no pudo consultar detalle: ${errores.join(" | ")}`);
+    return normalizarRespuestaDetalle(resultado);
   }
 
   return {
@@ -543,9 +242,7 @@ const API = {
         }
       })
       .catch(function(error) {
-        if (typeof onFailure === "function") {
-          onFailure(error.message || "Error al iniciar sesión.");
-        }
+        if (typeof onFailure === "function") onFailure(error.message || "Error al iniciar sesión.");
       });
   },
 
@@ -603,14 +300,14 @@ const API = {
       .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
-  obtenerDetalleIncidencia: function(idIncidencia, onSuccess, onFailure) {
-    SEC2_API.obtenerDetalleIncidenciaAsync(idIncidencia)
+  guardarIncidencia: function(datos, onSuccess, onFailure) {
+    SEC2_API.guardarIncidenciaAsync(datos)
       .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
       .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
-  guardarIncidencia: function(datos, onSuccess, onFailure) {
-    SEC2_API.guardarIncidenciaAsync(datos)
+  obtenerDetalleIncidencia: function(idIncidencia, onSuccess, onFailure) {
+    SEC2_API.obtenerDetalleIncidenciaAsync(idIncidencia)
       .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
       .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
@@ -639,10 +336,6 @@ const API = {
     if (typeof onSuccess === "function") onSuccess({ notificaciones: [] });
   }
 };
-
-/* =========================================================
-   Exposición global
-   ========================================================= */
 
 window.SEC2_API = SEC2_API;
 window.API = API;
