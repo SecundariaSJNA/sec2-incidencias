@@ -1,6 +1,6 @@
 /* =========================================================
-   SEC2 API — Supabase V9
-   SEC2_API_V9_RPC_GUARDAR_Y_DETALLE_INCIDENCIA_20260709
+   SEC2 API — Supabase V10
+   SEC2_API_V10_RPC_GUARDAR_DETALLE_ELIMINAR_20260709
    Compatible con app.js actual
    ========================================================= */
 
@@ -212,6 +212,25 @@ const SEC2_API = (() => {
     return normalizarRespuestaDetalle(resultado);
   }
 
+  async function eliminarIncidenciaAsync(idIncidencia) {
+    const resultado = await rpc("eliminar_incidencia_sec2", {
+      p_id_acceso_sesion: idSesion(),
+      p_id_incidencia: normalizarTexto(idIncidencia)
+    });
+
+    const fila = extraerRespuestaRpc(resultado);
+
+    if (!fila) {
+      throw new Error("No se recibió respuesta de Supabase al eliminar la incidencia.");
+    }
+
+    if (fila.success === false) {
+      throw new Error(fila.error || "No fue posible eliminar la incidencia.");
+    }
+
+    return fila;
+  }
+
   return {
     rpc,
     iniciarSesionAsync,
@@ -223,7 +242,8 @@ const SEC2_API = (() => {
     consultarFechasAsync,
     obtenerEstadisticaMensualAsync,
     guardarIncidenciaAsync,
-    obtenerDetalleIncidenciaAsync
+    obtenerDetalleIncidenciaAsync,
+    eliminarIncidenciaAsync
   };
 })();
 
@@ -317,7 +337,9 @@ const API = {
   },
 
   eliminarIncidencia: function(idIncidencia, onSuccess, onFailure) {
-    if (typeof onFailure === "function") onFailure("Eliminar incidencias aún no migrado a Supabase.");
+    SEC2_API.eliminarIncidenciaAsync(idIncidencia)
+      .then(function(data) { if (typeof onSuccess === "function") onSuccess(data); })
+      .catch(function(error) { if (typeof onFailure === "function") onFailure(error.message || error); });
   },
 
   obtenerNotificacionesUsuario: function(onSuccess, onFailure) {
