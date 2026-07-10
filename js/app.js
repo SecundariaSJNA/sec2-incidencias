@@ -1,4 +1,5 @@
 /* SEC2_APP_V17_REGLAS_DIAS_HABILES_USOS_BACK_PERFIL_20260710 */
+/* SEC2_APP_V18_FECHAS_MMM_BACK_PERFIL_ORDEN_DIRECCION_20260710 */
 const TEST_USERS = {
   "Direccion": "D001",
   "Correspondencia": "C001",
@@ -54,8 +55,8 @@ const MODULES = {
     acceso: "Permisos completos de administración y gestión.",
     opciones: [
       { nombre: "Mi perfil", descripcion: "Consulta personal e historial propio.", color: "gold", icono: "user" },
-      { nombre: "Otorgar incidencia", descripcion: "Crear nueva incidencia.", color: "purple", icono: "file-plus" },
       { nombre: "Consulta de fechas", descripcion: "Análisis por fecha o rango.", color: "orange", icono: "calendar" },
+      { nombre: "Otorgar incidencia", descripcion: "Crear nueva incidencia.", color: "purple", icono: "file-plus" },
       { nombre: "Historial general", descripcion: "Consulta por docente.", color: "green", icono: "history" },
       { nombre: "Reporte del día", descripcion: "Incidencias activas del día actual.", color: "blue-light", icono: "report" },
       { nombre: "Reporte semanal", descripcion: "Vista automática semanal.", color: "blue", icono: "calendar" },
@@ -379,6 +380,22 @@ function goBack() {
   if (currentScreen === "detailScreen" && detailBackOverride) {
     const destino = detailBackOverride;
     detailBackOverride = "";
+
+    // SEC2_FIX_DETALLE_GUARDADO_REGRESA_PERFIL_V18_20260710
+    // Todo detalle abierto justo después de guardar una incidencia debe regresar
+    // al resumen del docente para ver naturalmente la incidencia agregada.
+    if (destino === "personSummaryScreen" || destino === "resumenDocente") {
+      const personaDestino = selectedDetailPersonID || selectedPersonID || "";
+      if (personaDestino) {
+        profileMode = false;
+        navigationStack = [];
+        cargarResumenPersona(personaDestino, false);
+      } else {
+        goMain();
+      }
+      return;
+    }
+
     showScreen(destino, false);
     return;
   }
@@ -1030,21 +1047,19 @@ function formatearFechaHoraDetalle(valor) {
 
   if (!Number.isNaN(fecha.getTime())) {
     try {
-      return fecha.toLocaleString("es-MX", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
+      const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      const dia = String(fecha.getDate()).padStart(2, "0");
+      const mes = meses[fecha.getMonth()];
+      const anio = fecha.getFullYear();
+      const hora = fecha.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
+      return `${dia}/${mes}/${anio}, ${hora}`;
     } catch (error) {
       return fecha.toLocaleString();
     }
   }
 
   if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
-    const partes = texto.slice(0, 10).split("-");
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    return formatearFecha(texto.slice(0, 10));
   }
 
   return texto;
@@ -1521,7 +1536,11 @@ function guardarFormulario() {
     const idIncidenciaGuardada = obtenerIDIncidenciaDesdeRespuesta(resultado);
 
     if (idIncidenciaGuardada) {
-      setTimeout(function() { abrirDetalleIncidencia(idIncidenciaGuardada, "typeScreen"); }, 900);
+      // SEC2_FIX_DETALLE_GUARDADO_REGRESA_PERFIL_V18_20260710
+      // Después de crear cualquier incidencia, el detalle se abre como confirmación,
+      // pero la flecha Atrás debe volver al resumen del docente afectado.
+      selectedPersonID = usrIDUsuario;
+      setTimeout(function() { abrirDetalleIncidencia(idIncidenciaGuardada, "personSummaryScreen"); }, 900);
     } else {
       console.warn("La incidencia se guardó, pero la respuesta no incluyó IDIncidencia:", resultado);
       setTimeout(function() {
@@ -1552,10 +1571,19 @@ function mostrarEstadoFormulario(mensaje, esError, esOk) {
 }
 
 function formatearFecha(fechaISO) {
-  if (!fechaISO) return "Sin fecha"; if (fechaISO === "Pendiente") return "Pendiente";
-  const partes = fechaISO.toString().split("-");
-  if (partes.length !== 3) return fechaISO;
-  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  if (!fechaISO) return "Sin fecha";
+  if (fechaISO === "Pendiente") return "Pendiente";
+
+  const texto = fechaISO.toString();
+  const partes = texto.slice(0, 10).split("-");
+
+  if (partes.length === 3 && /^\d{4}$/.test(partes[0])) {
+    const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const mes = meses[Number(partes[1]) - 1] || partes[1];
+    return `${partes[2]}/${mes}/${partes[0]}`;
+  }
+
+  return texto;
 }
 
 function formatearFechaReal(fecha) { return formatearFecha(fecha); }
