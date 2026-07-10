@@ -1790,28 +1790,71 @@ function abrirConsultaFechas() {
   document.getElementById("rangeStatus").className = "status-box"; showScreen("rangeScreen");
 }
 
+// SEC2_FIX_CONSULTA_FECHAS_POR_DIA_SIN_DETALLE_BANNER_AZUL_VISIBLE_V23_20260710
 function ejecutarConsultaFechas() {
   const inicio = document.getElementById("rangeFechaInicio").value;
-  const fin = document.getElementById("rangeFechaFin").value; const status = document.getElementById("rangeStatus");
+  const fin = document.getElementById("rangeFechaFin").value;
+  const status = document.getElementById("rangeStatus");
   
   if (!inicio || !fin) { alert("Selecciona ambas fechas para el rango de consulta."); return; }
   status.className = "status-box show"; status.textContent = "Consultando...";
   
   API.consultarFechas({ FechaInicio: inicio, FechaFin: fin }, r => {
-    status.className = "status-box"; document.getElementById("rangeStats").innerHTML = renderEstadisticaGeneral(r);
-    const container = document.getElementById("rangeResults"); container.innerHTML = "";
-    if (!r.incidencias || r.incidencias.length === 0) {
-      container.innerHTML = crearTarjetaSimple("Sin incidencias", "No existen incidencias en este intervalo."); return;
-    }
-    container.innerHTML = `
-      <h2 class="section-title">Resultados de búsqueda</h2>
-      <p class="section-subtitle">Incidencias encontradas en el rango.</p>
-    `;
-    r.incidencias.forEach(inc => { container.appendChild(crearCardIncidencia(inc, true)); });
-    inicializarIconos();
+    status.className = "status-box";
+    document.getElementById("rangeStats").innerHTML = renderEstadisticaGeneral(r);
+
+    renderListaConsultaFechasPorDia(r.incidencias, {
+      fechas: r.diasHabiles || r.fechas || [],
+      fechaInicio: r.fechaInicio || inicio,
+      fechaFin: r.fechaFin || fin
+    });
   }, error => {
     status.className = "status-box show error"; status.textContent = obtenerMensajeError(error);
   });
+}
+
+function renderListaConsultaFechasPorDia(incidencias, opciones = {}) {
+  const container = document.getElementById("rangeResults");
+  container.innerHTML = "";
+
+  const lista = Array.isArray(incidencias) ? incidencias : [];
+  const fechasBase = Array.isArray(opciones.fechas) ? opciones.fechas : [];
+  const fechas = normalizarFechasReporte(lista, fechasBase, null);
+
+  container.innerHTML = `
+    <h2 class="section-title">Resultados de búsqueda</h2>
+    <p class="section-subtitle">Ausencias reales encontradas en el rango seleccionado.</p>
+  `;
+
+  if (fechas.length === 0) {
+    container.insertAdjacentHTML("beforeend", crearTarjetaSimple("Sin incidencias", "No existen ausencias reales en este intervalo."));
+    inicializarIconos();
+    return;
+  }
+
+  let totalMostradas = 0;
+
+  fechas.forEach(function(fecha) {
+    const delDia = lista.filter(function(inc) {
+      return obtenerFechaReporteIncidencia(inc) === normalizarFechaISO(fecha);
+    });
+
+    // En Consulta de fechas se separa día laboral por día laboral.
+    // Para rangos largos no se agrega tarjeta vacía por cada día sin ausencias, para no saturar la pantalla.
+    container.insertAdjacentHTML("beforeend", crearSeparadorFechaReporte(fecha));
+
+    delDia.forEach(function(incidencia) {
+      totalMostradas += 1;
+      // Consulta de fechas es operativa: no muestra Ver detalle y no muestra periodo dentro de la tarjeta.
+      container.appendChild(crearCardIncidencia(incidencia, false, { ocultarPeriodo: true }));
+    });
+  });
+
+  if (totalMostradas === 0) {
+    container.insertAdjacentHTML("beforeend", crearTarjetaSimple("Sin incidencias", "No existen ausencias reales en este intervalo."));
+  }
+
+  inicializarIconos();
 }
 
 function abrirEstadisticaMensual() {
