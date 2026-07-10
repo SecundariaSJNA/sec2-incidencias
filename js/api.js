@@ -1,6 +1,3 @@
-Biblioteca
-/api_SEC2_V4_guardar_incidencia_schema_cache_20260709.txt
-
 /* =========================================================
    SEC2 API — Supabase V4
    Capa compatible con app.js / incidencias.js / reportes.js
