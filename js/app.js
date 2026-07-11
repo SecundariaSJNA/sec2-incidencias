@@ -1,4 +1,4 @@
-/* SEC2_APP_V41_PDF_SIN_COLUMNA_ESTADO_20260711 */
+/* SEC2_APP_V42_PDF_MARGENES_TEXTO_MAS_GRANDE_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -2258,6 +2258,11 @@ function obtenerHistorialPersonaPromesaPDF(idPersona) {
 async function construirYMostrarPDFHistorialDocente(respuesta, periodoSeleccionado) {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+  // SEC2_PDF_V42: aumentar 1 punto toda la tipografía del reporte.
+  const setFontSizeBasePDF = doc.setFontSize.bind(doc);
+  doc.setFontSize = function(size) {
+    return setFontSizeBasePDF(Number(size) + 1);
+  };
 
   const persona = respuesta.persona || {};
   const incidenciasTodas = normalizarIncidenciasPDF(respuesta.incidencias || []);
@@ -2267,7 +2272,7 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
   const periodo = periodoSeleccionado ? obtenerPeriodoTextoSeleccionadoPDF(periodoSeleccionado) : obtenerPeriodoPDF(incidencias);
 
   dibujarEncabezadoPDF(doc, logoData, persona, periodo);
-  let y = 118;
+  let y = 142;
 
   y = dibujarTarjetaDocentePDF(doc, persona, y);
   y = dibujarEstadisticasRapidasPDF(doc, metricas, y + 20);
@@ -2294,7 +2299,7 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
     head: [["No.", "TIPO DE INCIDENCIA", "FECHA INICIO", "FECHA FIN", "DÍAS", "OBSERVACIONES"]],
     body: filasTabla,
     theme: "grid",
-    margin: { left: 20, right: 20, top: 112, bottom: 46 },
+    margin: { left: 30, right: 30, top: 136, bottom: 54 },
     styles: {
       font: "helvetica",
       fontSize: 7.6,
@@ -2538,54 +2543,52 @@ function obtenerTextoPeriodoReportePDF(periodo) {
 function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   const w = doc.internal.pageSize.getWidth();
   doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, w, 112, "F");
+  doc.rect(0, 0, w, 134, "F");
 
   if (logoData) {
-    try { doc.addImage(logoData, "PNG", 20, 16, 64, 64); } catch (e) {}
+    try { doc.addImage(logoData, "PNG", 32, 34, 60, 60); } catch (e) {}
   }
 
-  /* Encabezado institucional en azul, separado del bloque derecho del reporte. */
+  /* Encabezado institucional con margen seguro para impresión. */
   const azul = [5, 31, 89];
-  const centroInstitucionalX = 250;
-  const bloqueDerechoX = w - 28;
-  const bloqueDerechoCentroX = w - 88;
+  const centroInstitucionalX = 260;
+  const bloqueDerechoCentroX = w - 92;
 
   doc.setTextColor(azul[0], azul[1], azul[2]);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.8);
-  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 18, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 31, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 34, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 48, { align: "center" });
 
   doc.setFontSize(9.4);
-  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 47, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 61, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 65, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 80, { align: "center" });
 
   doc.setFontSize(8.2);
-  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 76, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 96, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
-  doc.text("REPORTE DE INCIDENCIAS", bloqueDerechoCentroX, 21, { align: "center" });
+  doc.text("REPORTE DE INCIDENCIAS", bloqueDerechoCentroX, 36, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.1);
-  doc.text("Resumen del docente", bloqueDerechoCentroX, 34, { align: "center" });
+  doc.text("Resumen del docente", bloqueDerechoCentroX, 51, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.9);
-  doc.text("Fecha de generación:", bloqueDerechoCentroX, 51, { align: "center" });
+  doc.text("Fecha de generación:", bloqueDerechoCentroX, 69, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text(formatearFechaHoraPDF(new Date()), bloqueDerechoCentroX, 62, { align: "center" });
+  doc.text(formatearFechaHoraPDF(new Date()), bloqueDerechoCentroX, 81, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.9);
-  doc.text("Periodo del reporte:", bloqueDerechoCentroX, 77, { align: "center" });
+  doc.text("Periodo del reporte:", bloqueDerechoCentroX, 98, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text(obtenerTextoPeriodoReportePDF(periodo), bloqueDerechoCentroX, 88, { align: "center" });
+  doc.text(obtenerTextoPeriodoReportePDF(periodo), bloqueDerechoCentroX, 110, { align: "center" });
 }
-
 
 function obtenerRolVisiblePDF(persona) {
   const raw = limpiarTextoPDF(
@@ -2891,7 +2894,7 @@ function asegurarEspacioPDF(doc, y, alto, logoData, persona, periodo) {
   if (y + alto > h - 52) {
     doc.addPage();
     dibujarEncabezadoPDF(doc, logoData, persona, periodo);
-    return 118;
+    return 142;
   }
   return y;
 }
@@ -2932,11 +2935,10 @@ function agregarPieYPaginacionPDF(doc) {
     doc.setPage(i);
     doc.setDrawColor(220, 38, 38);
     doc.setLineWidth(0.8);
-    doc.line(20, h - 30, w - 20, h - 30);
+    doc.line(30, h - 30, w - 30, h - 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(5, 31, 89);
-    doc.text(`Página ${i}/${total}`, w - 24, 92, { align: "right" });
     doc.text(`Página ${i}/${total}`, w / 2, h - 14, { align: "center" });
   }
 }
