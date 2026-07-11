@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
-    /* SEC2_INDEX_V35_PDF_ROL_LIMPIO_20260710 */
+    /* SEC2_INDEX_V36_PDF_ANDROID_SHARE_BOTON_OK_20260710 */
     .profile-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1211,6 +1211,23 @@
       }
     }
 
+  
+    /* SEC2_FIX_V36_PDF_ANDROID_BOTON_OK_20260710
+       Evita que Android deje deformado el botón al volver del PDF/share. */
+    .professional-card.pdf-card-loading {
+      opacity: 0.86 !important;
+      pointer-events: none !important;
+      filter: none !important;
+      transform: none !important;
+    }
+
+    .professional-card.pdf-card-loading .professional-icon,
+    .professional-card.pdf-card-loading .professional-title,
+    .professional-card.pdf-card-loading .professional-desc,
+    .professional-card.pdf-card-loading .professional-arrow {
+      pointer-events: none !important;
+    }
+
   </style>
 </head>
 
@@ -2068,4 +2085,3 @@
   </script>
 </body>
 </html>
-
