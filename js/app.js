@@ -1,4 +1,4 @@
-/* SEC2_APP_V47_PDF_COMPROBANTE_PERMISO_OFICIAL_FECHAS_USO_20260711 */
+/* SEC2_APP_V48_PDF_FIRMAS_COMPROBANTE_NOTIF_FIX_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -1655,7 +1655,12 @@ async function guardarNotificacionSEC2(usuario, mensaje) {
 
     const id = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
     API.guardarNotificacion({ IDUsuario: id, Mensaje: mensaje }, resolve, function(error) {
-      reject(error || directError);
+      const texto = String(error || "");
+      if (texto.toLowerCase().includes("no migrado")) {
+        reject(directError || error);
+      } else {
+        reject(error || directError);
+      }
     });
   });
 }
@@ -1713,16 +1718,18 @@ async function intentarGuardarNotificacionSupabaseSEC2(usuario, mensaje) {
 
   let ultimoError = null;
 
-  for (const payload of intentos) {
-    try {
-      const resultado = await cliente.from("notificaciones").insert([payload]).select().single();
-      if (resultado.error) {
-        ultimoError = resultado.error;
-        continue;
+  for (const tabla of ["notificaciones", "Notificaciones"]) {
+    for (const payload of intentos) {
+      try {
+        const resultado = await cliente.from(tabla).insert([payload]).select().single();
+        if (resultado.error) {
+          ultimoError = resultado.error;
+          continue;
+        }
+        return null;
+      } catch (error) {
+        ultimoError = error;
       }
-      return null;
-    } catch (error) {
-      ultimoError = error;
     }
   }
 
@@ -1761,14 +1768,24 @@ async function obtenerNotificacionesDesdeSupabaseSEC2(modo) {
   const cliente = obtenerClienteSupabaseNotificacionesSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase para notificaciones.");
 
-  const resultado = await cliente.from("notificaciones").select("*").order("created_at", { ascending: false });
-  if (resultado.error) {
-    const alt = await cliente.from("notificaciones").select("*");
-    if (alt.error) throw resultado.error;
-    return filtrarNotificacionesSEC2(alt.data || [], modo);
+  let ultimoError = null;
+  for (const tabla of ["notificaciones", "Notificaciones"]) {
+    try {
+      let resultado = await cliente.from(tabla).select("*").order("created_at", { ascending: false });
+      if (resultado.error) {
+        ultimoError = resultado.error;
+        resultado = await cliente.from(tabla).select("*");
+      }
+      if (resultado && !resultado.error) {
+        return filtrarNotificacionesSEC2(resultado.data || [], modo);
+      }
+      if (resultado && resultado.error) ultimoError = resultado.error;
+    } catch (error) {
+      ultimoError = error;
+    }
   }
 
-  return filtrarNotificacionesSEC2(resultado.data || [], modo);
+  throw ultimoError || new Error("No se pudieron leer notificaciones.");
 }
 
 function filtrarNotificacionesSEC2(lista, modo) {
@@ -1862,7 +1879,8 @@ function obtenerClienteSupabaseNotificacionesSEC2() {
     window.SEC2_SUPABASE,
     window.sec2Supabase,
     window.db,
-    window.supabase
+    window.supabaseDB,
+    window.SUPABASE_CLIENT
   ];
 
   for (const candidato of candidatos) {
@@ -1871,8 +1889,39 @@ function obtenerClienteSupabaseNotificacionesSEC2() {
 
   if (window.API && API.supabase && typeof API.supabase.from === "function") return API.supabase;
   if (window.API && API.client && typeof API.client.from === "function") return API.client;
+  if (window.API && API.supabaseClient && typeof API.supabaseClient.from === "function") return API.supabaseClient;
+
+  const url = obtenerGlobalSeguroSEC2("SUPABASE_URL") ||
+    obtenerGlobalSeguroSEC2("SEC2_SUPABASE_URL") ||
+    (window.SEC2_CONFIG && (window.SEC2_CONFIG.SUPABASE_URL || window.SEC2_CONFIG.url)) ||
+    (window.CONFIG && (window.CONFIG.SUPABASE_URL || window.CONFIG.supabaseUrl));
+
+  const key = obtenerGlobalSeguroSEC2("SUPABASE_ANON_KEY") ||
+    obtenerGlobalSeguroSEC2("SUPABASE_KEY") ||
+    obtenerGlobalSeguroSEC2("SEC2_SUPABASE_ANON_KEY") ||
+    (window.SEC2_CONFIG && (window.SEC2_CONFIG.SUPABASE_ANON_KEY || window.SEC2_CONFIG.anonKey)) ||
+    (window.CONFIG && (window.CONFIG.SUPABASE_ANON_KEY || window.CONFIG.supabaseKey));
+
+  if (url && key && window.supabase && typeof window.supabase.createClient === "function") {
+    try {
+      window.supabaseClientSEC2 = window.supabase.createClient(url, key);
+      return window.supabaseClientSEC2;
+    } catch (error) {
+      console.warn("No se pudo crear cliente Supabase para notificaciones:", error);
+    }
+  }
 
   return null;
+}
+
+function obtenerGlobalSeguroSEC2(nombre) {
+  try {
+    // Permite leer constantes globales declaradas en config.js aunque no estén montadas en window.
+    // eslint-disable-next-line no-new-func
+    return Function(`return (typeof ${nombre} !== "undefined") ? ${nombre} : ""`)();
+  } catch (error) {
+    return "";
+  }
 }
 
 function normalizarNotificacionSEC2(n) {
@@ -2733,6 +2782,7 @@ function dibujarEncabezadoComprobantePDF(doc, logoData) {
 
 function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
   const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
   const azul = [5, 31, 89];
   const margen = 46;
   let y = 168;
@@ -2750,7 +2800,7 @@ function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
   y += 30;
   doc.setDrawColor(205, 215, 228);
   doc.setLineWidth(0.8);
-  doc.roundedRect(margen, y, w - margen * 2, 112, 6, 6);
+  doc.roundedRect(margen, y, w - margen * 2, 132, 6, 6);
   doc.setFontSize(10.2);
   doc.setTextColor(azul[0], azul[1], azul[2]);
   doc.text("DATOS DEL PERMISO", margen + 20, y + 28);
@@ -2760,8 +2810,9 @@ function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
   doc.text(`Folio: ${limpiarTextoPDF(incidencia.Folio || "Sin folio")}`, margen + 20, y + 52);
   doc.text(`Tipo: ${limpiarTextoPDF(incidencia.TipoIncidencia)}`, margen + 20, y + 72);
   doc.text(`Periodo autorizado: ${formatearFechaPDF(incidencia.FechaInicio)} al ${formatearFechaPDF(incidencia.FechaFin)}`, margen + 20, y + 92);
+  doc.text(`Registrado por: ${limpiarTextoPDF(incidencia.RegistradoPor || "Sin dato")}`, margen + 20, y + 112);
 
-  y += 138;
+  y += 158;
   doc.roundedRect(margen, y, w - margen * 2, 92, 6, 6);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.2);
@@ -2776,25 +2827,26 @@ function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
   const esPermisoOficial = esPermisoOficialTexto(incidencia.TipoIncidencia);
 
   if (esPermisoOficial) {
-    doc.roundedRect(margen, y, w - margen * 2, 190, 6, 6);
+    const altoBloque = 134;
+    if (y + altoBloque + 100 > h - 64) {
+      doc.addPage();
+      y = 70;
+    }
+
+    doc.roundedRect(margen, y, w - margen * 2, altoBloque, 6, 6);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.2);
-    doc.text("FECHAS OFICIALES AUTORIZADAS", margen + 20, y + 28);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.8);
-    doc.text(`Fecha oficial 1: ${formatearFechaPDF(incidencia.FechaOficial1)}`, margen + 20, y + 52);
-    doc.text(`Fecha oficial 2: ${formatearFechaPDF(incidencia.FechaOficial2)}`, margen + 20, y + 72);
-    doc.text(`Fecha oficial 3: ${formatearFechaPDF(incidencia.FechaOficial3)}`, margen + 20, y + 92);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.2);
-    doc.text("FECHAS DE USO", margen + 20, y + 124);
-
-    dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, margen + 20, y + 138, w - margen * 2 - 40);
-    y += 218;
+    doc.text("FECHAS OFICIALES Y DE USO", margen + 20, y + 28);
+    dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, margen + 20, y + 46, w - margen * 2 - 40);
+    y += altoBloque + 34;
   } else {
-    doc.roundedRect(margen, y, w - margen * 2, 82, 6, 6);
+    const altoBloque = 82;
+    if (y + altoBloque + 100 > h - 64) {
+      doc.addPage();
+      y = 70;
+    }
+
+    doc.roundedRect(margen, y, w - margen * 2, altoBloque, 6, 6);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.2);
     doc.text("OBSERVACIONES", margen + 20, y + 28);
@@ -2803,25 +2855,23 @@ function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
     const obs = limpiarTextoPDF(incidencia.Observaciones || "Sin observaciones.");
     const lineas = doc.splitTextToSize(obs, w - margen * 2 - 40);
     doc.text(lineas.slice(0, 3), margen + 20, y + 52);
-    y += 110;
+    y += altoBloque + 38;
   }
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(75, 85, 99);
-  doc.text(`Sello / registrado por: ${limpiarTextoPDF(incidencia.RegistradoPor || "Sin dato")}`, margen, y);
+  if (y + 86 > h - 64) {
+    doc.addPage();
+    y = 86;
+  }
 
-  y += 76;
   dibujarFirmasPDF(doc, y);
 }
 
-
 function dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, x, y, ancho) {
-  const colUso = 70;
-  const colFecha = ancho - 170;
-  const colEstado = 100;
-  const altoHeader = 18;
-  const altoFila = 22;
+  const colOficial = Math.floor(ancho * 0.36);
+  const colUso = Math.floor(ancho * 0.36);
+  const colEstado = ancho - colOficial - colUso;
+  const altoHeader = 20;
+  const altoFila = 24;
 
   doc.setDrawColor(205, 215, 228);
   doc.setLineWidth(0.6);
@@ -2829,42 +2879,42 @@ function dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, x, y, anch
   doc.rect(x, y, ancho, altoHeader, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.4);
+  doc.setFontSize(7.2);
   doc.setTextColor(255, 255, 255);
-  doc.text("USO", x + colUso / 2, y + 12, { align: "center" });
-  doc.text("FECHA", x + colUso + colFecha / 2, y + 12, { align: "center" });
-  doc.text("ESTADO", x + colUso + colFecha + colEstado / 2, y + 12, { align: "center" });
+  doc.text("FECHA OFICIAL", x + colOficial / 2, y + 13, { align: "center" });
+  doc.text("FECHA DE USO", x + colOficial + colUso / 2, y + 13, { align: "center" });
+  doc.text("ESTADO", x + colOficial + colUso + colEstado / 2, y + 13, { align: "center" });
 
-  const usos = [
-    { etiqueta: "Uso 1", fecha: incidencia.Uso1Fecha },
-    { etiqueta: "Uso 2", fecha: incidencia.Uso2Fecha },
-    { etiqueta: "Uso 3", fecha: incidencia.Uso3Fecha }
+  const filas = [
+    { oficial: incidencia.FechaOficial1, uso: incidencia.Uso1Fecha },
+    { oficial: incidencia.FechaOficial2, uso: incidencia.Uso2Fecha },
+    { oficial: incidencia.FechaOficial3, uso: incidencia.Uso3Fecha }
   ];
 
-  usos.forEach(function(uso, idx) {
+  filas.forEach(function(fila, idx) {
     const fy = y + altoHeader + idx * altoFila;
-    const tieneFecha = Boolean(uso.fecha);
+    const usado = Boolean(fila.uso);
 
     doc.setDrawColor(205, 215, 228);
     doc.setLineWidth(0.5);
     doc.rect(x, fy, ancho, altoFila);
-    doc.line(x + colUso, fy, x + colUso, fy + altoFila);
-    doc.line(x + colUso + colFecha, fy, x + colUso + colFecha, fy + altoFila);
+    doc.line(x + colOficial, fy, x + colOficial, fy + altoFila);
+    doc.line(x + colOficial + colUso, fy, x + colOficial + colUso, fy + altoFila);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.8);
+    doc.setFontSize(7.7);
     doc.setTextColor(5, 31, 89);
-    doc.text(uso.etiqueta, x + colUso / 2, fy + 14, { align: "center" });
-    doc.text(tieneFecha ? formatearFechaPDF(uso.fecha) : "", x + colUso + 8, fy + 14);
+    doc.text(formatearFechaPDF(fila.oficial), x + 8, fy + 15);
+    doc.text(usado ? formatearFechaPDF(fila.uso) : "", x + colOficial + 8, fy + 15);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.2);
-    if (tieneFecha) {
+    doc.setFontSize(7.1);
+    if (usado) {
       doc.setTextColor(21, 154, 52);
-      doc.text("USADO", x + colUso + colFecha + colEstado / 2, fy + 14, { align: "center" });
+      doc.text("USADO", x + colOficial + colUso + colEstado / 2, fy + 15, { align: "center" });
     } else {
       doc.setTextColor(245, 124, 0);
-      doc.text("NO USADO", x + colUso + colFecha + colEstado / 2, fy + 14, { align: "center" });
+      doc.text("NO USADO", x + colOficial + colUso + colEstado / 2, fy + 15, { align: "center" });
     }
   });
 }
@@ -3693,21 +3743,20 @@ function asegurarEspacioPDF(doc, y, alto, logoData, persona, periodo) {
 
 function dibujarFirmasPDF(doc, y) {
   const w = doc.internal.pageSize.getWidth();
-  const margen = 52;
-  const anchoLinea = 180;
-  const izquierdaX = margen;
-  const derechaX = w - margen - anchoLinea;
+  const anchoLinea = 150;
+  const izquierdaX = 88;
+  const derechaX = w - 88 - anchoLinea;
   const lineaY = y + 34;
 
   doc.setDrawColor(5, 31, 89);
-  doc.setLineWidth(0.9);
+  doc.setLineWidth(0.8);
   doc.line(izquierdaX, lineaY, izquierdaX + anchoLinea, lineaY);
   doc.line(derechaX, lineaY, derechaX + anchoLinea, lineaY);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.setTextColor(5, 31, 89);
-  doc.text("Director(a) o Subdirector(a)", izquierdaX + anchoLinea / 2, lineaY + 13, { align: "center" });
+  doc.text("Dirección / Subdirección", izquierdaX + anchoLinea / 2, lineaY + 13, { align: "center" });
   doc.text("Docente", derechaX + anchoLinea / 2, lineaY + 13, { align: "center" });
 
   return lineaY + 18;
@@ -3861,3 +3910,4 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
+
