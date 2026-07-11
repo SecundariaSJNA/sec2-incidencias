@@ -1,4 +1,4 @@
-/* SEC2_APP_V42_PDF_MARGENES_TEXTO_MAS_GRANDE_20260711 */
+/* SEC2_APP_V47_PDF_COMPROBANTE_PERMISO_OFICIAL_FECHAS_USO_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -282,6 +282,89 @@ function esRolPrefectura(rolStr) {
 function esRolDocente(rolStr) {
   const r = (rolStr || "").toLowerCase();
   return r.includes("doc");
+}
+
+function rolActualTurnosRestringidos() {
+  const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
+  return rol === "Prefectura" || rol === "Correspondencia";
+}
+
+function esRolDireccionActual() {
+  const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
+  return rol === "Direccion";
+}
+
+function normalizarTurnoSEC2(valor) {
+  const t = String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!t) return "";
+  if (t === "m" || t.includes("matutino") || t.includes("manana") || t.includes("mañana")) return "M";
+  if (t === "v" || t.includes("vespertino") || t.includes("tarde")) return "V";
+  if (t === "a" || t.includes("ambos") || t.includes("mixto") || t.includes("doble")) return "A";
+  return t.toUpperCase();
+}
+
+function obtenerTurnoSesionSEC2() {
+  return normalizarTurnoSEC2(
+    sessionStorage.getItem("userTurno") ||
+    sessionStorage.getItem("turno") ||
+    ""
+  );
+}
+
+function obtenerTurnoRegistroSEC2(registro) {
+  if (!registro) return "";
+  return normalizarTurnoSEC2(
+    registro.Turno ||
+    registro.turno ||
+    registro.TurnoNombre ||
+    registro.turno_nombre ||
+    registro.turnoNombre ||
+    registro.UsuarioTurno ||
+    registro.usuario_turno ||
+    registro.DocenteTurno ||
+    registro.docente_turno ||
+    ""
+  );
+}
+
+function puedeVerRegistroPorTurnoSEC2(registro) {
+  if (esRolDireccionActual()) return true;
+  if (!rolActualTurnosRestringidos()) return true;
+
+  const turnoSesion = obtenerTurnoSesionSEC2();
+  const turnoRegistro = obtenerTurnoRegistroSEC2(registro);
+
+  if (!turnoSesion) return false;
+  if (turnoRegistro === "A") return true;
+  return turnoRegistro === turnoSesion;
+}
+
+function filtrarPorTurnoVisibleSEC2(lista) {
+  if (!Array.isArray(lista)) return [];
+  if (!rolActualTurnosRestringidos()) return lista;
+  return lista.filter(puedeVerRegistroPorTurnoSEC2);
+}
+
+function validarPersonaPermitidaPorTurnoSEC2(persona) {
+  if (puedeVerRegistroPorTurnoSEC2(persona)) return true;
+  alert("No tiene autorización para consultar personal fuera de su turno.");
+  return false;
+}
+
+function ajustarEstadisticaTurnoSEC2(respuesta, listaFiltrada) {
+  const r = Object.assign({}, respuesta || {});
+  if (!rolActualTurnosRestringidos()) return r;
+  const ausentes = Array.isArray(listaFiltrada) ? listaFiltrada.length : 0;
+  r.ausentes = ausentes;
+  if (typeof r.presentes === "number" && typeof r.total === "number") {
+    r.presentes = Math.max(0, Number(r.total) - ausentes);
+  }
+  return r;
 }
 
 function cerrarSesion() {
@@ -603,11 +686,22 @@ function abrirSelectorHistorial() {
   select.innerHTML = `<option value="">Cargando docentes...</option>`;
   API.obtenerUsuariosParaFormulario(
     usuarios => {
+      const usuariosVisibles = filtrarPorTurnoVisibleSEC2(usuarios || []);
       select.innerHTML = `<option value="">Seleccionar docente</option>`;
-      usuarios.forEach(usuario => {
+
+      if (usuariosVisibles.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Sin docentes visibles para su turno";
+        select.appendChild(option);
+        return;
+      }
+
+      usuariosVisibles.forEach(usuario => {
         const option = document.createElement("option");
         option.value = usuario.IDAcceso; // Enlazado unívocamente a IDAcceso (Col H)
-        option.textContent = `${usuario.Apellidos} ${usuario.Nombre}`;
+        const turno = TURNOS_TEXTO[usuario.Turno] || usuario.TurnoNombre || usuario.turno_nombre || usuario.Turno || "";
+        option.textContent = `${usuario.Apellidos} ${usuario.Nombre}${turno ? " · " + turno : ""}`;
         select.appendChild(option);
       });
     },
@@ -632,7 +726,13 @@ function cargarResumenPersona(idPersona, pushHistory = true) {
   document.getElementById("personSummaryContent").innerHTML = crearTarjetaSimple("Cargando resumen...", "Consultando base de datos.");
   showScreen("personSummaryScreen", pushHistory);
   
-  API.obtenerResumenPersona(idPersona, renderResumenPersona, error => {
+  API.obtenerResumenPersona(idPersona, respuesta => {
+    if (!validarPersonaPermitidaPorTurnoSEC2(respuesta.persona || {})) {
+      document.getElementById("personSummaryContent").innerHTML = crearTarjetaSimple("Acceso restringido", "Este registro no corresponde a su turno.");
+      return;
+    }
+    renderResumenPersona(respuesta);
+  }, error => {
     document.getElementById("personSummaryContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
 }
@@ -923,14 +1023,15 @@ function cargarHistorialPersona(filtro) {
 
 function renderHistorialConDetalles(incidencias) {
   const container = document.getElementById("dataList"); container.innerHTML = "";
-  if (!incidencias || incidencias.length === 0) {
+  const lista = filtrarPorTurnoVisibleSEC2(Array.isArray(incidencias) ? incidencias : []);
+  if (lista.length === 0) {
     container.innerHTML = crearTarjetaSimple("Sin registros", "No hay incidencias para mostrar."); return;
   }
   container.innerHTML = `
     <h2 class="section-title">Incidencias registradas</h2>
     <p class="section-subtitle">Fechas cercanas al periodo consultado.</p>
   `;
-  incidencias.forEach(incidencia => { container.appendChild(crearCardIncidencia(incidencia, true)); });
+  lista.forEach(incidencia => { container.appendChild(crearCardIncidencia(incidencia, true)); });
   inicializarIconos();
 }
 
@@ -946,7 +1047,14 @@ function abrirDetalleIncidencia(idIncidencia, regresarA = "") {
     showScreen("detailScreen");
   }
   
-  API.obtenerDetalleIncidencia(idIncidencia, renderDetalleIncidencia, error => {
+  API.obtenerDetalleIncidencia(idIncidencia, respuesta => {
+    const incidencia = respuesta.incidencia || {};
+    if (!validarPersonaPermitidaPorTurnoSEC2(incidencia)) {
+      document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Acceso restringido", "Esta incidencia no corresponde a su turno.");
+      return;
+    }
+    renderDetalleIncidencia(respuesta);
+  }, error => {
     document.getElementById("detailContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
 }
@@ -1012,6 +1120,8 @@ function renderDetalleIncidencia(respuesta) {
       <p class="data-card-text"><strong>Fecha de captura:</strong> ${formatearFechaHoraDetalle(i.FechaRegistro || i.CreatedAt)}</p>
     </article>
   `;
+
+  html += `<button class="primary-button" onclick="generarComprobantePDFIncidenciaActual()">Generar PDF</button>`;
 
   if (andPuedeEditar && i.TipoIncidencia && esPermisoOfTexto(i.TipoIncidencia)) {
     html += `<button class="primary-button" onclick="abrirEdicionUsoPermiso()">Editar incidencia</button>`;
@@ -1274,8 +1384,14 @@ function escapeHTML(texto) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+
+let notifyUsuariosCacheSEC2 = [];
+
 function abrirNotificaciones() {
-  if (currentModule !== "Direccion") { abrirLeerNotificaciones(); return; }
+  if (currentModule !== "Direccion") {
+    abrirLeerNotificaciones();
+    return;
+  }
   showScreen("notifyMenuScreen");
 }
 
@@ -1283,72 +1399,113 @@ function abrirLeerNotificaciones() {
   document.getElementById("notifyReadList").innerHTML = crearTarjetaSimple("Cargando notificaciones...", "Consultando mensajes recibidos.");
   document.getElementById("notifyReadSubtitle").textContent = "Mensajes recibidos (" + currentModule + ")";
   showScreen("notifyReadScreen");
-  
-  API.obtenerNotificacionesUsuario(respuesta => {
-    renderNotificacionesLeidas(respuesta.notificaciones);
-  }, error => {
+
+  obtenerNotificacionesUsuarioSEC2().then(function(notificaciones) {
+    renderNotificacionesLeidas(notificaciones);
+  }).catch(function(error) {
     document.getElementById("notifyReadList").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
 }
 
 function renderNotificacionesLeidas(notificaciones) {
-  const container = document.getElementById("notifyReadList"); container.innerHTML = "";
-  if (!notificaciones || notificaciones.length === 0) {
-    container.innerHTML = crearTarjetaSimple("Sin notificaciones", "No se encontraron mensajes en su bandeja."); return;
+  const container = document.getElementById("notifyReadList");
+  container.innerHTML = "";
+
+  const lista = Array.isArray(notificaciones) ? notificaciones.map(normalizarNotificacionSEC2) : [];
+
+  if (lista.length === 0) {
+    container.innerHTML = crearTarjetaSimple("Sin notificaciones", "No se encontraron mensajes en su bandeja.");
+    return;
   }
-  notificaciones.forEach(n => {
-    const meta = estadoNotificacionMeta(n.Estado); const card = document.createElement("article");
+
+  lista.forEach(function(n) {
+    const meta = estadoNotificacionMeta(n.Estado);
+    const card = document.createElement("article");
     card.className = `notification-card-full ${meta.clase}`;
     card.onclick = () => abrirDetalleNotificacionRecibida(n.IDNotificacion);
+
+    const preview = estaNotificacionLeidaSEC2(n.Estado)
+      ? "Mensaje leído. Toque para consultar el contenido."
+      : "Mensaje pendiente. Toque para abrir y marcar como leído.";
+
     card.innerHTML = `
       <div style="display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:center;margin-bottom:8px;">
         <div class="notification-status-icon solid-${meta.color}" data-icon="${meta.icono}"></div>
         <div>
           <h3 style="margin:0;font-size:11px;font-weight:900;text-transform:uppercase;color:var(--text);">${meta.texto}</h3>
-          <p style="margin:0;font-size:10px;color:#4b5563;">Enviado el: ${n.FechaEnvio}</p>
+          <p style="margin:0;font-size:10px;color:#4b5563;">Enviado el: ${escapeHTML(n.FechaEnvio || "Sin fecha")}</p>
         </div>
       </div>
-      <p class="notification-message">${escapeHTML(n.Mensaje)}</p>
-      <p class="notification-meta"><strong>Enviado por:</strong> Dirección</p>
+      <p class="notification-message" style="font-weight:800;color:${estaNotificacionLeidaSEC2(n.Estado) ? "#4b5563" : "#dc2626"};">${escapeHTML(preview)}</p>
+      <p class="notification-meta"><strong>Enviado por:</strong> ${escapeHTML(n.EnviadoPor || "Dirección")}</p>
     `;
+
     container.appendChild(card);
   });
+
   inicializarIconos();
 }
 
 function abrirDetalleNotificacionRecibida(idNotificacion) {
   showScreen("notifyDetailScreen");
   document.getElementById("notifyDetailContent").innerHTML = crearTarjetaSimple("Cargando mensaje...", "Actualizando estado de lectura.");
-  
-  API.obtenerDetalleNotificacion(idNotificacion, respuesta => {
-    const n = respuesta.notificacion; const meta = estadoNotificacionMeta(n.Estado);
+
+  obtenerDetalleNotificacionSEC2(idNotificacion).then(async function(n) {
+    const notificacion = normalizarNotificacionSEC2(n);
+
+    try {
+      await marcarNotificacionLeidaSEC2(notificacion.IDNotificacion);
+      notificacion.Estado = "Leída";
+      notificacion.FechaLectura = notificacion.FechaLectura || formatearFechaHoraDetalle(new Date().toISOString());
+    } catch (errorLectura) {
+      console.warn("No se pudo marcar la notificación como leída:", errorLectura);
+    }
+
+    const meta = estadoNotificacionMeta(notificacion.Estado);
     document.getElementById("notifyDetailIcon").className = `brand-icon solid-${meta.color}`;
     document.getElementById("notifyDetailIcon").setAttribute("data-icon", "bell");
     document.getElementById("notifyDetailContent").innerHTML = `
       <article class="notification-card-full" style="border-left:7px solid var(--cyan);">
-        <p class="notification-date">Recibido: ${escapeHTML(n.FechaEnvio)}</p>
-        <p class="notification-message">${escapeHTML(n.Mensaje)}</p>
+        <p class="notification-date">Recibido: ${escapeHTML(notificacion.FechaEnvio || "Sin fecha")}</p>
+        <p class="notification-message">${escapeHTML(notificacion.Mensaje || "Sin mensaje.")}</p>
         <p class="notification-meta"><strong>Estatus:</strong> Leído</p>
-        <p class="notification-meta"><strong>Leído el:</strong> ${escapeHTML(n.FechaLectura)}</p>
+        <p class="notification-meta"><strong>Leído el:</strong> ${escapeHTML(notificacion.FechaLectura || "Ahora")}</p>
       </article>
     `;
-  }, error => {
+  }).catch(function(error) {
     document.getElementById("notifyDetailContent").innerHTML = crearTarjetaSimple("Error al leer", obtenerMensajeError(error));
   });
 }
 
 function abrirEnviarNotificacion() {
-  const select = document.getElementById("notifyUserSelect"); select.innerHTML = `<option value="">Cargando personas...</option>`;
-  showScreen("notifySendScreen"); document.getElementById("notifySendStatus").className = "status-box";
-  
-  API.obtenerUsuariosParaFormulario(usuarios => {
-    select.innerHTML = `<option value="">Seleccionar persona</option>`;
-    usuarios.forEach(u => {
-      const opt = document.createElement("option"); opt.value = u.IDAcceso;
-      opt.textContent = `${u.Apellidos} ${u.Nombre} (${u.Rol})`; select.appendChild(opt);
+  const select = document.getElementById("notifyUserSelect");
+  select.innerHTML = `<option value="">Cargando personas...</option>`;
+  document.getElementById("notifyMessage").value = "";
+  document.getElementById("notifySendStatus").className = "status-box";
+  showScreen("notifySendScreen");
+
+  obtenerUsuariosNotificacionesSEC2().then(function(usuarios) {
+    notifyUsuariosCacheSEC2 = Array.isArray(usuarios) ? usuarios : [];
+
+    select.innerHTML = `
+      <option value="">Seleccionar persona</option>
+      <option value="TODOS">TODOS</option>
+    `;
+
+    notifyUsuariosCacheSEC2.forEach(function(u) {
+      const id = u.IDAcceso || u.id_acceso || u.idAcceso || u.ID || u.id || "";
+      if (!id) return;
+
+      const opt = document.createElement("option");
+      opt.value = id;
+      const rol = u.Rol || u.rol || "";
+      const turno = TURNOS_TEXTO[u.Turno] || u.turno_nombre || u.Turno || u.turno || "";
+      opt.textContent = `${u.Apellidos || u.apellidos || ""} ${u.Nombre || u.nombre || ""}${rol ? " (" + rol + ")" : ""}${turno ? " · " + turno : ""}`.trim();
+      select.appendChild(opt);
     });
-  }, error => {
-    select.innerHTML = `<option value="">Error cargando personal</option>`; alert(obtenerMensajeError(error));
+  }).catch(function(error) {
+    select.innerHTML = `<option value="">Error cargando personal</option>`;
+    alert(obtenerMensajeError(error));
   });
 }
 
@@ -1356,50 +1513,396 @@ function ejecutarEnvioNotificacion() {
   const id = document.getElementById("notifyUserSelect").value;
   const msg = document.getElementById("notifyMessage").value;
   const status = document.getElementById("notifySendStatus");
-  if (!id) { alert("Selecciona la persona a notificar."); return; }
-  if (!msg.trim()) { alert("Escribe el contenido del mensaje."); return; }
-  status.className = "status-box show"; status.textContent = "Enviando notificación...";
-  
-  API.guardarNotificacion({ IDUsuario: id, Mensaje: msg }, respuesta => {
+
+  if (!id) {
+    alert("Selecciona la persona a notificar.");
+    return;
+  }
+
+  if (!msg.trim()) {
+    alert("Escribe el contenido del mensaje.");
+    return;
+  }
+
+  status.className = "status-box show";
+  status.textContent = id === "TODOS" ? "Enviando notificación a todos..." : "Enviando notificación...";
+
+  enviarNotificacionesSEC2(id, msg.trim()).then(function(resumen) {
     status.className = "status-box show ok";
-    status.textContent = "Notificación enviada correctamente a " + respuesta.Nombre + " " + respuesta.Apellidos;
+    status.textContent = resumen.mensaje;
     document.getElementById("notifyMessage").value = "";
-  }, error => {
-    status.className = "status-box show error"; status.textContent = obtenerMensajeError(error);
+  }).catch(function(error) {
+    status.className = "status-box show error";
+    status.textContent = obtenerMensajeError(error);
   });
 }
 
 function abrirNotificacionesEnviadas() {
   document.getElementById("notifySentList").innerHTML = crearTarjetaSimple("Cargando notificaciones...", "Consultando historial de mensajes enviados.");
   showScreen("notifySentScreen");
-  
-  API.obtenerNotificacionesEnviadas(respuesta => {
-    renderNotificacionesEnviadasLista(respuesta.notificaciones);
-  }, error => {
+
+  obtenerNotificacionesEnviadasSEC2().then(function(notificaciones) {
+    renderNotificacionesEnviadasLista(notificaciones);
+  }).catch(function(error) {
     document.getElementById("notifySentList").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
 }
 
 function renderNotificacionesEnviadasLista(notificaciones) {
-  const container = document.getElementById("notifySentList"); container.innerHTML = "";
-  if (!notificaciones || notificaciones.length === 0) {
-    container.innerHTML = crearTarjetaSimple("Sin notificaciones", "No ha enviado notificaciones a ningún docente."); return;
+  const container = document.getElementById("notifySentList");
+  container.innerHTML = "";
+
+  const lista = Array.isArray(notificaciones) ? notificaciones.map(normalizarNotificacionSEC2) : [];
+
+  if (lista.length === 0) {
+    container.innerHTML = crearTarjetaSimple("Sin notificaciones", "No ha enviado notificaciones a ningún docente.");
+    return;
   }
-  notificaciones.forEach(n => {
-    const meta = estadoNotificacionMeta(n.Estado); const card = document.createElement("article");
+
+  lista.forEach(function(n) {
+    const meta = estadoNotificacionMeta(n.Estado);
+    const card = document.createElement("article");
     card.className = `notification-card-full ${meta.clase}`;
     card.onclick = () => abrirDetalleNotificacionEnviada(n.IDNotificacion);
     card.innerHTML = `
-      <p class="notification-date">Enviado: ${escapeHTML(n.FechaEnvio)} para: ${escapeHTML(n.Nombre)} ${escapeHTML(n.Apellidos)}</p>
-      <p class="notification-message">${escapeHTML(n.Mensaje)}</p>
-      <p class="notification-meta"><strong>Estatus lectura:</strong> ${meta.texto}</p>
+      <p class="notification-date">Enviado: ${escapeHTML(n.FechaEnvio || "Sin fecha")} para: ${escapeHTML(`${n.Nombre || ""} ${n.Apellidos || ""}`.trim() || n.IDUsuario || "Destinatario")}</p>
+      <p class="notification-message">${escapeHTML(n.Mensaje || "Sin mensaje.")}</p>
+      <p class="notification-meta"><strong>Estatus lectura:</strong> ${escapeHTML(n.Estado || "No leída")}</p>
+      ${n.FechaLectura ? `<p class="notification-meta"><strong>Leído el:</strong> ${escapeHTML(n.FechaLectura)}</p>` : ""}
     `;
     container.appendChild(card);
   });
+
   inicializarIconos();
 }
 
-function abrirDetalleNotificacionEnviada(idNotifId) { alert("Revisando estatus de lectura del mensaje: " + NotifId); }
+function abrirDetalleNotificacionEnviada(idNotificacion) {
+  showScreen("notifyDetailScreen");
+  document.getElementById("notifyDetailContent").innerHTML = crearTarjetaSimple("Cargando notificación enviada...", "Consultando estado de lectura.");
+
+  obtenerDetalleNotificacionSEC2(idNotificacion).then(function(n) {
+    const notificacion = normalizarNotificacionSEC2(n);
+    const meta = estadoNotificacionMeta(notificacion.Estado);
+    document.getElementById("notifyDetailIcon").className = `brand-icon solid-${meta.color}`;
+    document.getElementById("notifyDetailIcon").setAttribute("data-icon", "bell");
+    document.getElementById("notifyDetailContent").innerHTML = `
+      <article class="notification-card-full" style="border-left:7px solid var(--${meta.color});">
+        <p class="notification-date">Enviado: ${escapeHTML(notificacion.FechaEnvio || "Sin fecha")}</p>
+        <p class="notification-message">${escapeHTML(notificacion.Mensaje || "Sin mensaje.")}</p>
+        <p class="notification-meta"><strong>Para:</strong> ${escapeHTML(`${notificacion.Nombre || ""} ${notificacion.Apellidos || ""}`.trim() || notificacion.IDUsuario || "Destinatario")}</p>
+        <p class="notification-meta"><strong>Estatus lectura:</strong> ${escapeHTML(notificacion.Estado || "No leída")}</p>
+        ${notificacion.FechaLectura ? `<p class="notification-meta"><strong>Leído el:</strong> ${escapeHTML(notificacion.FechaLectura)}</p>` : ""}
+      </article>
+    `;
+  }).catch(function(error) {
+    document.getElementById("notifyDetailContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
+  });
+}
+
+function obtenerUsuariosNotificacionesSEC2() {
+  return new Promise(function(resolve, reject) {
+    API.obtenerUsuariosParaFormulario(function(usuarios) {
+      const lista = Array.isArray(usuarios) ? usuarios : [];
+      resolve(lista.filter(function(u) {
+        const rol = String(u.Rol || u.rol || "").toLowerCase();
+        return !rol.includes("direc") && !rol.includes("dirección");
+      }));
+    }, reject);
+  });
+}
+
+async function enviarNotificacionesSEC2(destino, mensaje) {
+  const usuarios = notifyUsuariosCacheSEC2.length ? notifyUsuariosCacheSEC2 : await obtenerUsuariosNotificacionesSEC2();
+  const enviados = [];
+  const errores = [];
+
+  if (destino === "TODOS") {
+    for (const usuario of usuarios) {
+      const id = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
+      if (!id) continue;
+      try {
+        await guardarNotificacionSEC2(usuario, mensaje);
+        enviados.push(usuario);
+      } catch (error) {
+        errores.push(error);
+      }
+    }
+
+    if (enviados.length === 0 && errores.length) throw errores[0];
+    return { total: enviados.length, mensaje: `Notificación enviada correctamente a ${enviados.length} persona(s).` };
+  }
+
+  const usuario = usuarios.find(function(u) {
+    const id = u.IDAcceso || u.id_acceso || u.idAcceso || u.ID || u.id || "";
+    return String(id) === String(destino);
+  }) || { IDAcceso: destino };
+
+  await guardarNotificacionSEC2(usuario, mensaje);
+  const nombre = `${usuario.Nombre || usuario.nombre || ""} ${usuario.Apellidos || usuario.apellidos || ""}`.trim();
+  return { total: 1, mensaje: `Notificación enviada correctamente${nombre ? " a " + nombre : ""}.` };
+}
+
+async function guardarNotificacionSEC2(usuario, mensaje) {
+  const directError = await intentarGuardarNotificacionSupabaseSEC2(usuario, mensaje);
+  if (!directError) return true;
+
+  // Respaldo por API existente, por si el módulo ya fue migrado en api.js.
+  return new Promise(function(resolve, reject) {
+    if (!API.guardarNotificacion) {
+      reject(directError);
+      return;
+    }
+
+    const id = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
+    API.guardarNotificacion({ IDUsuario: id, Mensaje: mensaje }, resolve, function(error) {
+      reject(error || directError);
+    });
+  });
+}
+
+async function intentarGuardarNotificacionSupabaseSEC2(usuario, mensaje) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) return new Error("No se detectó cliente Supabase para notificaciones.");
+
+  const idUsuario = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
+  const enviadoPor = sessionStorage.getItem("userIDAcceso") || sessionStorage.getItem("userID") || "Direccion";
+  const fecha = new Date().toISOString();
+  const idNotificacion = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `NOT-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+  const intentos = [
+    {
+      IDNotificacion: idNotificacion,
+      IDUsuario: idUsuario,
+      Nombre: usuario.Nombre || usuario.nombre || "",
+      Apellidos: usuario.Apellidos || usuario.apellidos || "",
+      Correo: usuario.Correo || usuario.correo || "",
+      Rol: usuario.Rol || usuario.rol || "",
+      Turno: usuario.Turno || usuario.turno || "",
+      Mensaje: mensaje,
+      EnviadoPor: enviadoPor,
+      FechaEnvio: fecha,
+      Estado: "No leída",
+      FechaLectura: "",
+      LeidoPor: ""
+    },
+    {
+      id_notificacion: idNotificacion,
+      id_usuario: idUsuario,
+      nombre: usuario.Nombre || usuario.nombre || "",
+      apellidos: usuario.Apellidos || usuario.apellidos || "",
+      correo: usuario.Correo || usuario.correo || "",
+      rol: usuario.Rol || usuario.rol || "",
+      turno: usuario.Turno || usuario.turno || "",
+      mensaje: mensaje,
+      enviado_por: enviadoPor,
+      fecha_envio: fecha,
+      estado: "No leída",
+      fecha_lectura: null,
+      leido_por: null
+    },
+    {
+      idusuario: idUsuario,
+      nombre: usuario.Nombre || usuario.nombre || "",
+      apellidos: usuario.Apellidos || usuario.apellidos || "",
+      mensaje: mensaje,
+      enviadopor: enviadoPor,
+      fechaenvio: fecha,
+      estado: "No leída"
+    }
+  ];
+
+  let ultimoError = null;
+
+  for (const payload of intentos) {
+    try {
+      const resultado = await cliente.from("notificaciones").insert([payload]).select().single();
+      if (resultado.error) {
+        ultimoError = resultado.error;
+        continue;
+      }
+      return null;
+    } catch (error) {
+      ultimoError = error;
+    }
+  }
+
+  return ultimoError || new Error("No se pudo guardar notificación en Supabase.");
+}
+
+function obtenerNotificacionesUsuarioSEC2() {
+  return obtenerNotificacionesDesdeSupabaseSEC2("recibidas").catch(function(errorDirecto) {
+    return new Promise(function(resolve, reject) {
+      if (!API.obtenerNotificacionesUsuario) {
+        reject(errorDirecto);
+        return;
+      }
+      API.obtenerNotificacionesUsuario(function(respuesta) {
+        resolve(respuesta.notificaciones || []);
+      }, reject);
+    });
+  });
+}
+
+function obtenerNotificacionesEnviadasSEC2() {
+  return obtenerNotificacionesDesdeSupabaseSEC2("enviadas").catch(function(errorDirecto) {
+    return new Promise(function(resolve, reject) {
+      if (!API.obtenerNotificacionesEnviadas) {
+        reject(errorDirecto);
+        return;
+      }
+      API.obtenerNotificacionesEnviadas(function(respuesta) {
+        resolve(respuesta.notificaciones || []);
+      }, reject);
+    });
+  });
+}
+
+async function obtenerNotificacionesDesdeSupabaseSEC2(modo) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase para notificaciones.");
+
+  const resultado = await cliente.from("notificaciones").select("*").order("created_at", { ascending: false });
+  if (resultado.error) {
+    const alt = await cliente.from("notificaciones").select("*");
+    if (alt.error) throw resultado.error;
+    return filtrarNotificacionesSEC2(alt.data || [], modo);
+  }
+
+  return filtrarNotificacionesSEC2(resultado.data || [], modo);
+}
+
+function filtrarNotificacionesSEC2(lista, modo) {
+  const idSesion = String(sessionStorage.getItem("userIDAcceso") || sessionStorage.getItem("userID") || "");
+  const enviadoPorSesion = String(sessionStorage.getItem("userIDAcceso") || sessionStorage.getItem("userID") || "Direccion");
+
+  return (Array.isArray(lista) ? lista : [])
+    .map(normalizarNotificacionSEC2)
+    .filter(function(n) {
+      if (modo === "enviadas") {
+        return String(n.EnviadoPor || "") === enviadoPorSesion || currentModule === "Direccion";
+      }
+      return String(n.IDUsuario || "") === idSesion;
+    })
+    .sort(function(a, b) {
+      return String(b.FechaEnvio || "").localeCompare(String(a.FechaEnvio || ""));
+    });
+}
+
+async function obtenerDetalleNotificacionSEC2(idNotificacion) {
+  const directa = await obtenerDetalleNotificacionSupabaseSEC2(idNotificacion).catch(function() { return null; });
+  if (directa) return directa;
+
+  return new Promise(function(resolve, reject) {
+    if (!API.obtenerDetalleNotificacion) {
+      reject("No se encontró la notificación.");
+      return;
+    }
+
+    API.obtenerDetalleNotificacion(idNotificacion, function(respuesta) {
+      resolve(respuesta.notificacion || respuesta);
+    }, reject);
+  });
+}
+
+async function obtenerDetalleNotificacionSupabaseSEC2(idNotificacion) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  const lista = await obtenerNotificacionesDesdeSupabaseSEC2(currentModule === "Direccion" ? "enviadas" : "recibidas");
+  const encontrada = lista.find(function(n) {
+    return String(n.IDNotificacion) === String(idNotificacion);
+  });
+
+  if (!encontrada) throw new Error("No se encontró la notificación.");
+  return encontrada;
+}
+
+async function marcarNotificacionLeidaSEC2(idNotificacion) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  const fecha = new Date().toISOString();
+  const leidoPor = sessionStorage.getItem("userIDAcceso") || sessionStorage.getItem("userID") || "";
+
+  const intentos = [
+    { filtro: "IDNotificacion", datos: { Estado: "Leída", FechaLectura: fecha, LeidoPor: leidoPor } },
+    { filtro: "id_notificacion", datos: { estado: "Leída", fecha_lectura: fecha, leido_por: leidoPor } },
+    { filtro: "id", datos: { estado: "Leída", fecha_lectura: fecha, leido_por: leidoPor } }
+  ];
+
+  let ultimoError = null;
+
+  for (const intento of intentos) {
+    try {
+      const resultado = await cliente.from("notificaciones").update(intento.datos).eq(intento.filtro, idNotificacion);
+      if (resultado.error) {
+        ultimoError = resultado.error;
+        continue;
+      }
+      return true;
+    } catch (error) {
+      ultimoError = error;
+    }
+  }
+
+  // Respaldo API si existe.
+  if (API.marcarNotificacionLeida) {
+    return new Promise(function(resolve, reject) {
+      API.marcarNotificacionLeida(idNotificacion, resolve, reject);
+    });
+  }
+
+  throw ultimoError || new Error("No se pudo marcar como leída.");
+}
+
+function obtenerClienteSupabaseNotificacionesSEC2() {
+  const candidatos = [
+    window.supabaseClient,
+    window.supabaseClientSEC2,
+    window.SEC2_SUPABASE,
+    window.sec2Supabase,
+    window.db,
+    window.supabase
+  ];
+
+  for (const candidato of candidatos) {
+    if (candidato && typeof candidato.from === "function") return candidato;
+  }
+
+  if (window.API && API.supabase && typeof API.supabase.from === "function") return API.supabase;
+  if (window.API && API.client && typeof API.client.from === "function") return API.client;
+
+  return null;
+}
+
+function normalizarNotificacionSEC2(n) {
+  n = n || {};
+  return {
+    IDNotificacion: n.IDNotificacion || n.id_notificacion || n.idNotificacion || n.id || "",
+    IDUsuario: n.IDUsuario || n.id_usuario || n.idusuario || n.usuario_id || n.destinatario_id || "",
+    Nombre: n.Nombre || n.nombre || "",
+    Apellidos: n.Apellidos || n.apellidos || "",
+    Correo: n.Correo || n.correo || "",
+    Rol: n.Rol || n.rol || "",
+    Turno: n.Turno || n.turno || "",
+    Mensaje: n.Mensaje || n.mensaje || "",
+    EnviadoPor: n.EnviadoPor || n.enviado_por || n.enviadopor || n.enviado_por_id || "",
+    FechaEnvio: formatearFechaHoraDetalle(n.FechaEnvio || n.fecha_envio || n.fechaenvio || n.created_at || n.CreatedAt || ""),
+    Estado: normalizarEstadoNotificacionSEC2(n.Estado || n.estado || "No leída"),
+    FechaLectura: n.FechaLectura || n.fecha_lectura ? formatearFechaHoraDetalle(n.FechaLectura || n.fecha_lectura) : "",
+    LeidoPor: n.LeidoPor || n.leido_por || ""
+  };
+}
+
+function normalizarEstadoNotificacionSEC2(estado) {
+  const e = String(estado || "").toLowerCase();
+  if (e.includes("leída") || e.includes("leida") || e === "leido" || e === "read") return "Leída";
+  return "No leída";
+}
+
+function estaNotificacionLeidaSEC2(estado) {
+  return normalizarEstadoNotificacionSEC2(estado) === "Leída";
+}
 
 function esPermisoOfTexto(tipo) { return String(tipo || "").toLowerCase() === "permiso oficial"; }
 
@@ -1608,9 +2111,11 @@ function cargarReporteDia() {
   document.getElementById("dataBrandIcon").setAttribute("data-icon", "report"); showScreen("dataScreen");
   
   API.obtenerReporteDia(respuesta => {
+    const incidenciasVisibles = filtrarPorTurnoVisibleSEC2(respuesta.incidencias || []);
+    const respuestaVisible = ajustarEstadisticaTurnoSEC2(respuesta, incidenciasVisibles);
     document.getElementById("dataSubtitle").textContent = "Personal activo o con incidencias el " + formatearFecha(respuesta.fecha);
-    document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(respuesta);
-    renderListaReportePorDia(respuesta.incidencias, {
+    document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(respuestaVisible);
+    renderListaReportePorDia(incidenciasVisibles, {
       fechaUnica: respuesta.fecha,
       titulo: "Personal con incidencia",
       subtitulo: "Docentes ausentes o con permiso.",
@@ -1784,9 +2289,11 @@ function cargarReporteSemanal() {
   document.getElementById("dataBrandIcon").setAttribute("data-icon", "calendar"); showScreen("dataScreen");
   
   API.obtenerReporteSemanal(r => {
+    const incidenciasVisibles = filtrarPorTurnoVisibleSEC2(r.incidencias || []);
+    const respuestaVisible = ajustarEstadisticaTurnoSEC2(r, incidenciasVisibles);
     document.getElementById("dataSubtitle").textContent = `Cinco días hábiles: ${formatearFecha(r.fechaInicio)} al ${formatearFecha(r.fechaFin)}`;
-    document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(r);
-    renderListaReportePorDia(r.incidencias, {
+    document.getElementById("dataStats").innerHTML = renderEstadisticaGeneral(respuestaVisible);
+    renderListaReportePorDia(incidenciasVisibles, {
       fechas: r.diasHabiles || r.fechas || [],
       titulo: "Personal con incidencia",
       subtitulo: "Docentes ausentes o con permiso.",
@@ -1812,9 +2319,11 @@ function ejecutarConsultaFechas() {
   
   API.consultarFechas({ FechaInicio: inicio, FechaFin: fin }, r => {
     status.className = "status-box";
-    document.getElementById("rangeStats").innerHTML = renderEstadisticaGeneral(r);
+    const incidenciasVisibles = filtrarPorTurnoVisibleSEC2(r.incidencias || []);
+    const respuestaVisible = ajustarEstadisticaTurnoSEC2(r, incidenciasVisibles);
+    document.getElementById("rangeStats").innerHTML = renderEstadisticaGeneral(respuestaVisible);
 
-    renderListaConsultaFechasPorDia(r.incidencias, {
+    renderListaConsultaFechasPorDia(incidenciasVisibles, {
       fechas: r.diasHabiles || r.fechas || [],
       fechaInicio: r.fechaInicio || inicio,
       fechaFin: r.fechaFin || fin
@@ -2107,6 +2616,281 @@ function debeMostrarBotonPDFHistorial() {
   return !profileMode && (rol === "Direccion" || rol === "Prefectura" || rol === "Correspondencia");
 }
 
+
+async function generarComprobantePDFIncidenciaActual() {
+  if (!selectedIncidentID) {
+    alert("Primero abra el detalle de una incidencia.");
+    return;
+  }
+
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("No se cargó la librería PDF. Revisa conexión o recarga la página.");
+    return;
+  }
+
+  const botonTemporal = document.activeElement && document.activeElement.tagName === "BUTTON"
+    ? document.activeElement
+    : null;
+  const textoOriginal = botonTemporal ? botonTemporal.textContent : "";
+
+  try {
+    if (botonTemporal) {
+      botonTemporal.disabled = true;
+      botonTemporal.textContent = "GENERANDO PDF...";
+    }
+
+    const respuesta = await obtenerDetalleIncidenciaPromesaPDF(selectedIncidentID);
+    await construirYMostrarPDFComprobanteIncidencia(respuesta || {});
+  } catch (error) {
+    console.error("Error generando comprobante PDF SEC2:", error);
+    alert("No fue posible generar el PDF: " + obtenerMensajeError(error));
+  } finally {
+    if (botonTemporal) {
+      botonTemporal.disabled = false;
+      botonTemporal.textContent = textoOriginal || "Generar PDF";
+    }
+  }
+}
+
+function obtenerDetalleIncidenciaPromesaPDF(idIncidencia) {
+  return new Promise(function(resolve, reject) {
+    API.obtenerDetalleIncidencia(idIncidencia, resolve, reject);
+  });
+}
+
+async function construirYMostrarPDFComprobanteIncidencia(respuesta) {
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+
+  const setFontSizeBasePDF = doc.setFontSize.bind(doc);
+  doc.setFontSize = function(size) {
+    return setFontSizeBasePDF(Number(size) + 1);
+  };
+
+  const incidencia = normalizarIncidenciaComprobantePDF(respuesta.incidencia || respuesta || {});
+  const logoData = await cargarImagenPDF(SEC2_PDF_LOGO_URL);
+
+  dibujarEncabezadoComprobantePDF(doc, logoData);
+  dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia);
+  agregarPieYPaginacionPDF(doc);
+
+  abrirPDFEnTelefono(doc, crearNombreArchivoComprobantePDF(incidencia));
+}
+
+function normalizarIncidenciaComprobantePDF(i) {
+  return {
+    IDIncidencia: i.IDIncidencia || i.id || i.id_incidencia || "",
+    Folio: i.Folio || i.folio || obtenerFolioVisibleIncidencia(i) || "",
+    TipoIncidencia: i.TipoIncidencia || i.tipo || i.tipo_incidencia || "Incidencia",
+    Nombre: i.Nombre || i.nombre || "",
+    Apellidos: i.Apellidos || i.apellidos || "",
+    Turno: i.Turno || i.turno || "",
+    FechaInicio: i.FechaInicio || i.fecha_inicio || i.fechaInicio || "",
+    FechaFin: i.FechaFin || i.fecha_fin || i.fechaFin || i.FechaInicio || i.fecha_inicio || "",
+    FechaOficial1: i.FechaOficial1 || i.fecha_oficial_1 || i.fechaOficial1 || "",
+    FechaOficial2: i.FechaOficial2 || i.fecha_oficial_2 || i.fechaOficial2 || "",
+    FechaOficial3: i.FechaOficial3 || i.fecha_oficial_3 || i.fechaOficial3 || "",
+    Uso1Fecha: i.Uso1Fecha || i.uso_1_fecha || i.uso1_fecha || i.uso1Fecha || "",
+    Uso2Fecha: i.Uso2Fecha || i.uso_2_fecha || i.uso2_fecha || i.uso2Fecha || "",
+    Uso3Fecha: i.Uso3Fecha || i.uso_3_fecha || i.uso3_fecha || i.uso3Fecha || "",
+    Observaciones: i.Observaciones || i.observaciones || "",
+    RegistradoPor: i.RegistradoPor || i.registrado_por || i.sello || "",
+    FechaRegistro: i.FechaRegistro || i.fecha_registro || i.CreatedAt || i.created_at || new Date().toISOString()
+  };
+}
+
+function dibujarEncabezadoComprobantePDF(doc, logoData) {
+  const w = doc.internal.pageSize.getWidth();
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, w, 150, "F");
+
+  if (logoData) {
+    try { doc.addImage(logoData, "PNG", 36, 46, 58, 58); } catch (e) {}
+  }
+
+  const azul = [5, 31, 89];
+  const centroInstitucionalX = 260;
+  const bloqueDerechoCentroX = w - 92;
+
+  doc.setTextColor(azul[0], azul[1], azul[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.8);
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 46, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 60, { align: "center" });
+  doc.setFontSize(9.4);
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 77, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 92, { align: "center" });
+  doc.setFontSize(8.2);
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 108, { align: "center" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("COMPROBANTE DE PERMISO", bloqueDerechoCentroX, 54, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.3);
+  doc.text("Documento individual", bloqueDerechoCentroX, 70, { align: "center" });
+}
+
+function dibujarCuerpoComprobanteIncidenciaPDF(doc, incidencia) {
+  const w = doc.internal.pageSize.getWidth();
+  const azul = [5, 31, 89];
+  const margen = 46;
+  let y = 168;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(azul[0], azul[1], azul[2]);
+  doc.text(lugarYFechaComprobantePDF(new Date()), w - margen, y, { align: "right" });
+
+  y += 34;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("COMPROBANTE INDIVIDUAL DE PERMISO", w / 2, y, { align: "center" });
+
+  y += 30;
+  doc.setDrawColor(205, 215, 228);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(margen, y, w - margen * 2, 112, 6, 6);
+  doc.setFontSize(10.2);
+  doc.setTextColor(azul[0], azul[1], azul[2]);
+  doc.text("DATOS DEL PERMISO", margen + 20, y + 28);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`Folio: ${limpiarTextoPDF(incidencia.Folio || "Sin folio")}`, margen + 20, y + 52);
+  doc.text(`Tipo: ${limpiarTextoPDF(incidencia.TipoIncidencia)}`, margen + 20, y + 72);
+  doc.text(`Periodo autorizado: ${formatearFechaPDF(incidencia.FechaInicio)} al ${formatearFechaPDF(incidencia.FechaFin)}`, margen + 20, y + 92);
+
+  y += 138;
+  doc.roundedRect(margen, y, w - margen * 2, 92, 6, 6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.2);
+  doc.text("DOCENTE", margen + 20, y + 28);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const nombre = limpiarTextoPDF(`${incidencia.Nombre || ""} ${incidencia.Apellidos || ""}`.trim() || "Sin nombre");
+  doc.text(`Nombre: ${nombre}`, margen + 20, y + 52);
+  doc.text(`Turno: ${TURNOS_TEXTO[incidencia.Turno] || incidencia.Turno || "Sin dato"}`, margen + 20, y + 74);
+
+  y += 120;
+  const esPermisoOficial = esPermisoOficialTexto(incidencia.TipoIncidencia);
+
+  if (esPermisoOficial) {
+    doc.roundedRect(margen, y, w - margen * 2, 190, 6, 6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.2);
+    doc.text("FECHAS OFICIALES AUTORIZADAS", margen + 20, y + 28);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.8);
+    doc.text(`Fecha oficial 1: ${formatearFechaPDF(incidencia.FechaOficial1)}`, margen + 20, y + 52);
+    doc.text(`Fecha oficial 2: ${formatearFechaPDF(incidencia.FechaOficial2)}`, margen + 20, y + 72);
+    doc.text(`Fecha oficial 3: ${formatearFechaPDF(incidencia.FechaOficial3)}`, margen + 20, y + 92);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.2);
+    doc.text("FECHAS DE USO", margen + 20, y + 124);
+
+    dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, margen + 20, y + 138, w - margen * 2 - 40);
+    y += 218;
+  } else {
+    doc.roundedRect(margen, y, w - margen * 2, 82, 6, 6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.2);
+    doc.text("OBSERVACIONES", margen + 20, y + 28);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.7);
+    const obs = limpiarTextoPDF(incidencia.Observaciones || "Sin observaciones.");
+    const lineas = doc.splitTextToSize(obs, w - margen * 2 - 40);
+    doc.text(lineas.slice(0, 3), margen + 20, y + 52);
+    y += 110;
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(75, 85, 99);
+  doc.text(`Sello / registrado por: ${limpiarTextoPDF(incidencia.RegistradoPor || "Sin dato")}`, margen, y);
+
+  y += 76;
+  dibujarFirmasPDF(doc, y);
+}
+
+
+function dibujarTablaUsoPermisoOficialComprobantePDF(doc, incidencia, x, y, ancho) {
+  const colUso = 70;
+  const colFecha = ancho - 170;
+  const colEstado = 100;
+  const altoHeader = 18;
+  const altoFila = 22;
+
+  doc.setDrawColor(205, 215, 228);
+  doc.setLineWidth(0.6);
+  doc.setFillColor(5, 31, 89);
+  doc.rect(x, y, ancho, altoHeader, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.4);
+  doc.setTextColor(255, 255, 255);
+  doc.text("USO", x + colUso / 2, y + 12, { align: "center" });
+  doc.text("FECHA", x + colUso + colFecha / 2, y + 12, { align: "center" });
+  doc.text("ESTADO", x + colUso + colFecha + colEstado / 2, y + 12, { align: "center" });
+
+  const usos = [
+    { etiqueta: "Uso 1", fecha: incidencia.Uso1Fecha },
+    { etiqueta: "Uso 2", fecha: incidencia.Uso2Fecha },
+    { etiqueta: "Uso 3", fecha: incidencia.Uso3Fecha }
+  ];
+
+  usos.forEach(function(uso, idx) {
+    const fy = y + altoHeader + idx * altoFila;
+    const tieneFecha = Boolean(uso.fecha);
+
+    doc.setDrawColor(205, 215, 228);
+    doc.setLineWidth(0.5);
+    doc.rect(x, fy, ancho, altoFila);
+    doc.line(x + colUso, fy, x + colUso, fy + altoFila);
+    doc.line(x + colUso + colFecha, fy, x + colUso + colFecha, fy + altoFila);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.8);
+    doc.setTextColor(5, 31, 89);
+    doc.text(uso.etiqueta, x + colUso / 2, fy + 14, { align: "center" });
+    doc.text(tieneFecha ? formatearFechaPDF(uso.fecha) : "", x + colUso + 8, fy + 14);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.2);
+    if (tieneFecha) {
+      doc.setTextColor(21, 154, 52);
+      doc.text("USADO", x + colUso + colFecha + colEstado / 2, fy + 14, { align: "center" });
+    } else {
+      doc.setTextColor(245, 124, 0);
+      doc.text("NO USADO", x + colUso + colFecha + colEstado / 2, fy + 14, { align: "center" });
+    }
+  });
+}
+
+function textoUsosComprobantePDF(incidencia) {
+  const usos = [incidencia.Uso1Fecha, incidencia.Uso2Fecha, incidencia.Uso3Fecha]
+    .filter(Boolean)
+    .map(formatearFechaPDF);
+  return usos.length ? usos.join(", ") : "Sin uso registrado";
+}
+
+function lugarYFechaComprobantePDF(fecha) {
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const dia = fecha.getDate();
+  const mes = meses[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+  return `H. Zitácuaro, Mich., a ${dia} de ${mes} del ${anio}`;
+}
+
+function crearNombreArchivoComprobantePDF(incidencia) {
+  const folio = limpiarTextoPDF(incidencia.Folio || incidencia.IDIncidencia || "permiso")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_\-]/g, "");
+  return `SEC2_comprobante_${folio || "permiso"}.pdf`;
+}
+
 function abrirSelectorPeriodoPDF() {
   if (!selectedPersonID) {
     alert("Primero selecciona un docente.");
@@ -2272,7 +3056,7 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
   const periodo = periodoSeleccionado ? obtenerPeriodoTextoSeleccionadoPDF(periodoSeleccionado) : obtenerPeriodoPDF(incidencias);
 
   dibujarEncabezadoPDF(doc, logoData, persona, periodo);
-  let y = 142;
+  let y = 160;
 
   y = dibujarTarjetaDocentePDF(doc, persona, y);
   y = dibujarEstadisticasRapidasPDF(doc, metricas, y + 20);
@@ -2299,7 +3083,7 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
     head: [["No.", "TIPO DE INCIDENCIA", "FECHA INICIO", "FECHA FIN", "DÍAS", "OBSERVACIONES"]],
     body: filasTabla,
     theme: "grid",
-    margin: { left: 30, right: 30, top: 136, bottom: 54 },
+    margin: { left: 34, right: 34, top: 154, bottom: 58 },
     styles: {
       font: "helvetica",
       fontSize: 7.6,
@@ -2543,13 +3327,13 @@ function obtenerTextoPeriodoReportePDF(periodo) {
 function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   const w = doc.internal.pageSize.getWidth();
   doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, w, 134, "F");
+  doc.rect(0, 0, w, 150, "F");
 
   if (logoData) {
-    try { doc.addImage(logoData, "PNG", 32, 34, 60, 60); } catch (e) {}
+    try { doc.addImage(logoData, "PNG", 32, 46, 58, 58); } catch (e) {}
   }
 
-  /* Encabezado institucional con margen seguro para impresión. */
+  /* Encabezado institucional con margen superior seguro para impresión. */
   const azul = [5, 31, 89];
   const centroInstitucionalX = 260;
   const bloqueDerechoCentroX = w - 92;
@@ -2557,37 +3341,37 @@ function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   doc.setTextColor(azul[0], azul[1], azul[2]);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.8);
-  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 34, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 48, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 46, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 60, { align: "center" });
 
   doc.setFontSize(9.4);
-  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 65, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 80, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 77, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 92, { align: "center" });
 
   doc.setFontSize(8.2);
-  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 96, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 108, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
-  doc.text("REPORTE DE INCIDENCIAS", bloqueDerechoCentroX, 36, { align: "center" });
+  doc.text("REPORTE DE INCIDENCIAS", bloqueDerechoCentroX, 48, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.1);
-  doc.text("Resumen del docente", bloqueDerechoCentroX, 51, { align: "center" });
+  doc.text("Resumen del docente", bloqueDerechoCentroX, 63, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.9);
-  doc.text("Fecha de generación:", bloqueDerechoCentroX, 69, { align: "center" });
+  doc.text("Fecha de generación:", bloqueDerechoCentroX, 81, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text(formatearFechaHoraPDF(new Date()), bloqueDerechoCentroX, 81, { align: "center" });
+  doc.text(formatearFechaHoraPDF(new Date()), bloqueDerechoCentroX, 93, { align: "center" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.9);
-  doc.text("Periodo del reporte:", bloqueDerechoCentroX, 98, { align: "center" });
+  doc.text("Periodo del reporte:", bloqueDerechoCentroX, 110, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text(obtenerTextoPeriodoReportePDF(periodo), bloqueDerechoCentroX, 110, { align: "center" });
+  doc.text(obtenerTextoPeriodoReportePDF(periodo), bloqueDerechoCentroX, 122, { align: "center" });
 }
 
 function obtenerRolVisiblePDF(persona) {
@@ -2685,21 +3469,29 @@ function dibujarEstadisticasRapidasPDF(doc, metricas, y) {
 
 function dibujarTituloSeccionPDF(doc, titulo, subtitulo, y) {
   const w = doc.internal.pageSize.getWidth();
-  doc.setDrawColor(5, 31, 89);
-  doc.setLineWidth(0.7);
-  doc.line(20, y + 10, 224, y + 10);
-  doc.line(w - 224, y + 10, w - 20, y + 10);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.setTextColor(5, 31, 89);
+
+  const titleWidth = Math.min(w - 120, doc.getTextWidth ? doc.getTextWidth(titulo) : 190);
+  const gap = 18;
+  const lineY = y + 10;
+  const leftEnd = (w / 2) - (titleWidth / 2) - gap;
+  const rightStart = (w / 2) + (titleWidth / 2) + gap;
+
+  doc.setDrawColor(5, 31, 89);
+  doc.setLineWidth(0.7);
+  if (leftEnd > 34) doc.line(34, lineY, leftEnd, lineY);
+  if (rightStart < w - 34) doc.line(rightStart, lineY, w - 34, lineY);
+
   doc.text(titulo, w / 2, y + 13, { align: "center" });
   if (subtitulo) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.6);
     doc.text(`(${subtitulo})`, w / 2, y + 24, { align: "center" });
-    return y + 28;
+    return y + 30;
   }
-  return y + 18;
+  return y + 20;
 }
 
 function dibujarResumenTotalPDF(doc, metricas, y) {
@@ -2894,7 +3686,7 @@ function asegurarEspacioPDF(doc, y, alto, logoData, persona, periodo) {
   if (y + alto > h - 52) {
     doc.addPage();
     dibujarEncabezadoPDF(doc, logoData, persona, periodo);
-    return 142;
+    return 160;
   }
   return y;
 }
@@ -2918,13 +3710,7 @@ function dibujarFirmasPDF(doc, y) {
   doc.text("Director(a) o Subdirector(a)", izquierdaX + anchoLinea / 2, lineaY + 13, { align: "center" });
   doc.text("Docente", derechaX + anchoLinea / 2, lineaY + 13, { align: "center" });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.7);
-  doc.setTextColor(75, 85, 99);
-  doc.text("Nombre y firma", izquierdaX + anchoLinea / 2, lineaY + 24, { align: "center" });
-  doc.text("Nombre y firma", derechaX + anchoLinea / 2, lineaY + 24, { align: "center" });
-
-  return lineaY + 28;
+  return lineaY + 18;
 }
 
 function agregarPieYPaginacionPDF(doc) {
@@ -2935,7 +3721,7 @@ function agregarPieYPaginacionPDF(doc) {
     doc.setPage(i);
     doc.setDrawColor(220, 38, 38);
     doc.setLineWidth(0.8);
-    doc.line(30, h - 30, w - 30, h - 30);
+    doc.line(34, h - 30, w - 34, h - 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(5, 31, 89);
