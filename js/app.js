@@ -1,4 +1,4 @@
-/* SEC2_APP_V40_PDF_FIX_NOMBRE_MES_CORTO_20260711 */
+/* SEC2_APP_V41_PDF_SIN_COLUMNA_ESTADO_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -2281,18 +2281,17 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
       formatearFechaPDF(incidencia.FechaInicio),
       formatearFechaPDF(incidencia.FechaFin),
       String(dias),
-      limpiarTextoPDF(incidencia.Observaciones || ""),
-      limpiarTextoPDF(incidencia.Estado || "Activa")
+      limpiarTextoPDF(incidencia.Observaciones || "")
     ];
   });
 
   if (filasTabla.length === 0) {
-    filasTabla.push(["-", "Sin incidencias", "-", "-", "0", "Sin registros en el periodo.", "-"]);
+    filasTabla.push(["-", "Sin incidencias", "-", "-", "0", "Sin registros en el periodo."]);
   }
 
   doc.autoTable({
     startY: y,
-    head: [["No.", "TIPO DE INCIDENCIA", "FECHA INICIO", "FECHA FIN", "DÍAS", "OBSERVACIONES", "ESTADO"]],
+    head: [["No.", "TIPO DE INCIDENCIA", "FECHA INICIO", "FECHA FIN", "DÍAS", "OBSERVACIONES"]],
     body: filasTabla,
     theme: "grid",
     margin: { left: 20, right: 20, top: 112, bottom: 46 },
@@ -2313,12 +2312,11 @@ async function construirYMostrarPDFHistorialDocente(respuesta, periodoSelecciona
     },
     columnStyles: {
       0: { halign: "center", cellWidth: 28 },
-      1: { cellWidth: 142, cellPadding: { left: 18, right: 4, top: 5, bottom: 5 } },
-      2: { halign: "center", cellWidth: 75 },
-      3: { halign: "center", cellWidth: 75 },
-      4: { halign: "center", cellWidth: 38 },
-      5: { cellWidth: 132 },
-      6: { halign: "center", cellWidth: 62 }
+      1: { cellWidth: 152, cellPadding: { left: 18, right: 4, top: 5, bottom: 5 } },
+      2: { halign: "center", cellWidth: 80 },
+      3: { halign: "center", cellWidth: 80 },
+      4: { halign: "center", cellWidth: 42 },
+      5: { cellWidth: 185 }
     },
     didDrawPage: function() {
       dibujarEncabezadoPDF(doc, logoData, persona, periodo);
