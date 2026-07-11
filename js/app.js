@@ -1,4 +1,5 @@
-/* SEC2_APP_V33_PDF_ROL_LIMPIO_20260710 */
+/* SEC2_APP_V34_PDF_ANDROID_SHARE_BOTON_OK_20260710 */
+/* Base: V33 + flujo Android PDF nativo y botón sin deformarse al volver */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
 /* Base: V29 + PDF gráfico por meses centrado cuando hay pocos meses */
@@ -2117,10 +2118,26 @@ async function generarHistorialPDFDocente() {
     return;
   }
 
-  const botonTemporal = document.activeElement;
-  const textoOriginal = botonTemporal && botonTemporal.textContent ? botonTemporal.textContent : "";
+  const botonTemporal = document.activeElement && document.activeElement.tagName === "BUTTON"
+    ? document.activeElement
+    : null;
+  const htmlOriginal = botonTemporal ? botonTemporal.innerHTML : "";
+  const disabledOriginal = botonTemporal ? botonTemporal.disabled : false;
+
   try {
-    if (botonTemporal && botonTemporal.tagName === "BUTTON") botonTemporal.textContent = "GENERANDO PDF...";
+    if (botonTemporal) {
+      botonTemporal.disabled = true;
+      botonTemporal.classList.add("pdf-card-loading");
+      botonTemporal.innerHTML = `
+        <div class="professional-icon solid-blue" data-icon="report"></div>
+        <div>
+          <h2 class="professional-title color-blue">GENERANDO PDF...</h2>
+          <p class="professional-desc">Construyendo reporte del historial.</p>
+        </div>
+        <div class="professional-arrow color-blue">›</div>
+      `;
+      inicializarIconos();
+    }
 
     const respuesta = await obtenerHistorialPersonaPromesaPDF(selectedPersonID);
     await construirYMostrarPDFHistorialDocente(respuesta || {});
@@ -2128,7 +2145,12 @@ async function generarHistorialPDFDocente() {
     console.error("Error generando PDF SEC2:", error);
     alert("No fue posible generar el PDF: " + obtenerMensajeError(error));
   } finally {
-    if (botonTemporal && botonTemporal.tagName === "BUTTON" && textoOriginal) botonTemporal.textContent = textoOriginal;
+    if (botonTemporal && htmlOriginal) {
+      botonTemporal.innerHTML = htmlOriginal;
+      botonTemporal.disabled = disabledOriginal;
+      botonTemporal.classList.remove("pdf-card-loading");
+      inicializarIconos();
+    }
   }
 }
 
@@ -2223,7 +2245,7 @@ async function construirYMostrarPDFHistorialDocente(respuesta) {
   agregarPieYPaginacionPDF(doc);
 
   const nombreArchivo = crearNombreArchivoPDF(persona);
-  abrirPDFEnTelefono(doc, nombreArchivo);
+  await abrirPDFEnTelefono(doc, nombreArchivo);
 }
 
 function normalizarIncidenciasPDF(incidencias) {
@@ -2701,14 +2723,69 @@ function agregarPieYPaginacionPDF(doc) {
   }
 }
 
-function abrirPDFEnTelefono(doc, nombreArchivo) {
+async function abrirPDFEnTelefono(doc, nombreArchivo) {
   const blob = doc.output("blob");
+  const archivo = crearArchivoPDFSeguro(blob, nombreArchivo);
+
+  if (esAndroidPDF() && archivo && navigator.share && navigator.canShare) {
+    try {
+      if (navigator.canShare({ files: [archivo] })) {
+        await navigator.share({
+          files: [archivo],
+          title: "Historial SEC2",
+          text: "Reporte de incidencias SEC2."
+        });
+        return;
+      }
+    } catch (error) {
+      if (!error || error.name !== "AbortError") {
+        console.warn("No se pudo compartir PDF con Web Share API:", error);
+      }
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const nueva = window.open(url, "_blank");
+
   if (!nueva) {
-    doc.save(nombreArchivo);
+    descargarBlobPDF(blob, nombreArchivo);
   }
-  setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+
+  setTimeout(function() { URL.revokeObjectURL(url); }, 90000);
+}
+
+function crearArchivoPDFSeguro(blob, nombreArchivo) {
+  try {
+    return new File([blob], nombreArchivo, { type: "application/pdf" });
+  } catch (error) {
+    return null;
+  }
+}
+
+function esAndroidPDF() {
+  return /Android/i.test(navigator.userAgent || "");
+}
+
+function descargarBlobPDF(blob, nombreArchivo) {
+  try {
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    enlace.style.display = "none";
+    document.body.appendChild(enlace);
+    enlace.click();
+    setTimeout(function() {
+      document.body.removeChild(enlace);
+      URL.revokeObjectURL(url);
+    }, 800);
+  } catch (error) {
+    try {
+      const jsPDF = window.jspdf && window.jspdf.jsPDF;
+      if (jsPDF) console.warn("Fallback de descarga no disponible.", error);
+    } catch (e) {}
+    alert("El PDF se generó, pero el navegador bloqueó abrirlo o descargarlo.");
+  }
 }
 
 function crearNombreArchivoPDF(persona) {
