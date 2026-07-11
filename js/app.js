@@ -1,5 +1,5 @@
-/* SEC2_APP_V34_PDF_ANDROID_SHARE_BOTON_OK_20260710 */
-/* Base: V33 + flujo Android PDF nativo y botón sin deformarse al volver */
+/* SEC2_APP_V36_PDF_ENCABEZADO_AZUL_CARGO_ESPACIADO_20260710 */
+/* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
 /* Base: V29 + PDF gráfico por meses centrado cuando hay pocos meses */
@@ -2373,7 +2373,7 @@ function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   }
 
   /* Encabezado institucional solicitado: sin lema y sin línea roja superior. */
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(5, 31, 89);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11.2);
   doc.text(SEC2_PDF_HEADER_LINEAS[0], w / 2, 18, { align: "center" });
@@ -2391,12 +2391,15 @@ function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   doc.setTextColor(5, 31, 89);
   doc.text("REPORTE DE INCIDENCIAS", w - 24, 23, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.2);
+  doc.setFontSize(6.9);
   doc.text("Resumen del docente", w - 24, 36, { align: "right" });
-  doc.text("Fecha de generación:", w - 160, 55);
-  doc.text(formatearFechaHoraPDF(new Date()), w - 24, 55, { align: "right" });
-  doc.text("Periodo del reporte:", w - 160, 70);
-  doc.text(`${periodo.inicio} al ${periodo.fin}`, w - 24, 70, { align: "right" });
+
+  const etiquetaX = w - 214;
+  const valorX = w - 24;
+  doc.text("Fecha de generación:", etiquetaX, 55);
+  doc.text(formatearFechaHoraPDF(new Date()), valorX, 55, { align: "right" });
+  doc.text("Periodo del reporte:", etiquetaX, 70);
+  doc.text(`${periodo.inicio} al ${periodo.fin}`, valorX, 70, { align: "right" });
 }
 
 
@@ -2447,8 +2450,11 @@ function dibujarTarjetaDocentePDF(doc, persona, y) {
   doc.text("Turno:", x + 84, y + 45);
   doc.setFont("helvetica", "normal");
   doc.text(TURNOS_TEXTO[persona.Turno] || persona.TurnoNombre || persona.turno_nombre || "Sin dato", x + 124, y + 45);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Cargo:", x + 236, y + 45);
   doc.setFont("helvetica", "normal");
-  doc.text(obtenerRolVisiblePDF(persona), x + 184, y + 45);
+  doc.text(obtenerRolVisiblePDF(persona), x + 280, y + 45);
   /* Por seguridad visual del reporte, el ID de Acceso no se imprime en PDF. */
   return y + 72;
 }
@@ -2725,45 +2731,17 @@ function agregarPieYPaginacionPDF(doc) {
 
 async function abrirPDFEnTelefono(doc, nombreArchivo) {
   const blob = doc.output("blob");
-  const archivo = crearArchivoPDFSeguro(blob, nombreArchivo);
-
-  if (esAndroidPDF() && archivo && navigator.share && navigator.canShare) {
-    try {
-      if (navigator.canShare({ files: [archivo] })) {
-        await navigator.share({
-          files: [archivo],
-          title: "Historial SEC2",
-          text: "Reporte de incidencias SEC2."
-        });
-        return;
-      }
-    } catch (error) {
-      if (!error || error.name !== "AbortError") {
-        console.warn("No se pudo compartir PDF con Web Share API:", error);
-      }
-    }
-  }
-
   const url = URL.createObjectURL(blob);
+
+  // En Android y iPhone primero se debe MOSTRAR el PDF.
+  // No se dispara compartir automático; el usuario comparte/descarga desde la vista nativa.
   const nueva = window.open(url, "_blank");
 
   if (!nueva) {
     descargarBlobPDF(blob, nombreArchivo);
   }
 
-  setTimeout(function() { URL.revokeObjectURL(url); }, 90000);
-}
-
-function crearArchivoPDFSeguro(blob, nombreArchivo) {
-  try {
-    return new File([blob], nombreArchivo, { type: "application/pdf" });
-  } catch (error) {
-    return null;
-  }
-}
-
-function esAndroidPDF() {
-  return /Android/i.test(navigator.userAgent || "");
+  setTimeout(function() { URL.revokeObjectURL(url); }, 120000);
 }
 
 function descargarBlobPDF(blob, nombreArchivo) {
@@ -2780,10 +2758,7 @@ function descargarBlobPDF(blob, nombreArchivo) {
       URL.revokeObjectURL(url);
     }, 800);
   } catch (error) {
-    try {
-      const jsPDF = window.jspdf && window.jspdf.jsPDF;
-      if (jsPDF) console.warn("Fallback de descarga no disponible.", error);
-    } catch (e) {}
+    console.warn("No se pudo abrir ni descargar el PDF:", error);
     alert("El PDF se generó, pero el navegador bloqueó abrirlo o descargarlo.");
   }
 }
