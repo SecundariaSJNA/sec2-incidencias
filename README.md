@@ -1,6 +1,6 @@
 # BASEMAESTRASEC2 — Portal Docentes / Sistema de permisos e incidencias
 
-Documento maestro operativo para GitHub README.md y respaldo técnico del proyecto SEC2-APP.
+Documento maestro,  operativo para GitHub README.md y respaldo técnico del proyecto SEC2-APP.
 
 Estado: BASE BUENA V2 / V3 visual
 Fecha de corte: 2026-07-01
