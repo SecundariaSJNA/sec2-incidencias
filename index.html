@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
-    /* SEC2_INDEX_V38_PDF_ENCABEZADO_AZUL_CARGO_ESPACIADO_20260710 */
+    /* SEC2_INDEX_V41_PDF_FIRMAS_DIRECTIVO_DOCENTE_20260711 */
     .profile-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1957,6 +1957,67 @@
           <p class="page-subtitle">Historial de mensajes enviados.</p>
 
           <div id="notifySentList"></div>
+
+          <footer class="secure-footer">
+            <div class="secure-content">
+              <span>▣</span>
+              <span>Sistema seguro y confidencial</span>
+            </div>
+          </footer>
+        </div>
+      </section>
+
+
+      <section id="pdfPeriodScreen" class="screen screen-scroll">
+        <div class="page-top">
+          <button class="top-back" onclick="goBack()">←</button>
+
+          <div class="brand-row">
+            <div class="brand-icon solid-blue" data-icon="report"></div>
+            <div class="brand-logo">
+              <img class="logo-real" src="https://raw.githubusercontent.com/SecSJNA/sec2-app/d810700d427ea454662ff6e4836c4d6431cb8115/logoPng.png" alt="Sec2">
+            </div>
+          </div>
+
+          <h1 class="page-title color-blue">Historial en PDF</h1>
+          <p class="page-subtitle">Seleccione el periodo de meses que aparecerá en el reporte.</p>
+
+          <section class="form-card">
+            <div class="form-row">
+              <div class="form-icon" data-icon="calendar"></div>
+              <div>
+                <label for="pdfPeriodoInicio">Mes inicial</label>
+                <select id="pdfPeriodoInicio">
+                  <option value="">Mes inicial</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-icon" data-icon="calendar"></div>
+              <div>
+                <label for="pdfPeriodoFin">Mes final</label>
+                <select id="pdfPeriodoFin">
+                  <option value="">Mes final</option>
+                </select>
+              </div>
+            </div>
+
+            <p class="page-subtitle" style="font-size: 13px; margin: 8px 0 14px;">
+              Máximo 12 meses. La gráfica mostrará todos los meses del periodo aunque estén en cero.
+            </p>
+
+            <button class="professional-card" onclick="generarHistorialPDFDesdePeriodo()" style="margin-bottom:8px;">
+              <div class="professional-icon solid-blue" data-icon="report"></div>
+              <div>
+                <h2 class="professional-title color-blue">Generar PDF</h2>
+                <p class="professional-desc">Crear reporte descargable del periodo seleccionado.</p>
+              </div>
+              <div class="professional-arrow color-blue">›</div>
+            </button>
+
+            <div id="pdfPeriodoStatus" class="status-box"></div>
+          </section>
 
           <footer class="secure-footer">
             <div class="secure-content">
