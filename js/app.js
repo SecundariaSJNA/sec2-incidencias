@@ -1,4 +1,4 @@
-/* SEC2_APP_V39_PDF_FIRMAS_DIRECTIVO_DOCENTE_20260711 */
+/* SEC2_APP_V40_PDF_FIX_NOMBRE_MES_CORTO_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -2488,6 +2488,11 @@ function etiquetaMesAnioPDF(fecha) {
   if (!fecha) return "Sin registros";
   const mes = nombreMesCortoPDF(fecha.getMonth());
   return `${mes}/${fecha.getFullYear()}`;
+}
+
+function nombreMesCortoPDF(mesIndex) {
+  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  return meses[mesIndex] || "";
 }
 
 function nombreMesLargoPDF(mesIndex) {
