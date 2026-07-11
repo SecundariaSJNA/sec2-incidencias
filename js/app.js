@@ -1,4 +1,4 @@
-/* SEC2_APP_V36_PDF_ENCABEZADO_AZUL_CARGO_ESPACIADO_20260710 */
+/* SEC2_APP_V39_PDF_FIRMAS_DIRECTIVO_DOCENTE_20260711 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -701,7 +701,7 @@ function renderResumenPersona(respuesta) {
       ${optionCard("Historial completo", descripcionHistorial, "green", "history", "cargarHistorialPersona('todas')")}
       ${optionCard("Próximas incidencias", "Consultar incidencias futuras programadas.", "blue", "calendar", "cargarHistorialPersona('proximas')")}
       ${optionCard("Estadística mensual", "Consultar gráfica mensual por tipo de incidencia.", "orange", "report", "abrirEstadisticaMensual()")}
-      ${debeMostrarBotonPDFHistorial() ? optionCard("Historial en PDF", "Generar reporte descargable del historial.", "blue", "report", "generarHistorialPDFDocente()") : ""}
+      ${debeMostrarBotonPDFHistorial() ? optionCard("Historial en PDF", "Seleccionar periodo y generar reporte descargable.", "blue", "report", "abrirSelectorPeriodoPDF()") : ""}
     </article>
     <section class="info-card">
       <div class="info-icon">i</div>
@@ -2107,7 +2107,84 @@ function debeMostrarBotonPDFHistorial() {
   return !profileMode && (rol === "Direccion" || rol === "Prefectura" || rol === "Correspondencia");
 }
 
-async function generarHistorialPDFDocente() {
+function abrirSelectorPeriodoPDF() {
+  if (!selectedPersonID) {
+    alert("Primero selecciona un docente.");
+    return;
+  }
+
+  llenarSelectoresPeriodoPDF();
+  const hoy = new Date();
+  const keyActual = keyMesPDF(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+
+  const inicio = document.getElementById("pdfPeriodoInicio");
+  const fin = document.getElementById("pdfPeriodoFin");
+  const status = document.getElementById("pdfPeriodoStatus");
+
+  if (inicio) inicio.value = keyActual;
+  if (fin) fin.value = keyActual;
+  if (status) status.className = "status-box";
+
+  showScreen("pdfPeriodScreen");
+}
+
+function llenarSelectoresPeriodoPDF() {
+  const inicio = document.getElementById("pdfPeriodoInicio");
+  const fin = document.getElementById("pdfPeriodoFin");
+  if (!inicio || !fin || inicio.options.length > 1) return;
+
+  const hoy = new Date();
+  const anioBase = hoy.getFullYear();
+  const opciones = [];
+  for (let anio = anioBase - 2; anio <= anioBase + 1; anio += 1) {
+    for (let mes = 0; mes < 12; mes += 1) {
+      const fecha = new Date(anio, mes, 1);
+      const key = keyMesPDF(fecha);
+      opciones.push(`<option value="${key}">${nombreMesLargoPDF(mes)} ${anio}</option>`);
+    }
+  }
+
+  inicio.innerHTML = `<option value="">Mes inicial</option>${opciones.join("")}`;
+  fin.innerHTML = `<option value="">Mes final</option>${opciones.join("")}`;
+}
+
+function obtenerPeriodoSeleccionadoPDF() {
+  const inicioValor = document.getElementById("pdfPeriodoInicio") ? document.getElementById("pdfPeriodoInicio").value : "";
+  const finValor = document.getElementById("pdfPeriodoFin") ? document.getElementById("pdfPeriodoFin").value : "";
+
+  if (!inicioValor || !finValor) {
+    alert("Seleccione mes de inicio y mes de fin.");
+    return null;
+  }
+
+  const inicio = fechaDesdeKeyMesPDF(inicioValor);
+  const fin = fechaDesdeKeyMesPDF(finValor);
+  if (!inicio || !fin) {
+    alert("Seleccione un periodo válido.");
+    return null;
+  }
+
+  const totalMeses = diferenciaMesesPDF(inicio, fin) + 1;
+  if (totalMeses <= 0) {
+    alert("El mes final no puede ser anterior al mes inicial.");
+    return null;
+  }
+
+  if (totalMeses > 12) {
+    alert("El reporte PDF puede abarcar máximo 12 meses.");
+    return null;
+  }
+
+  return {
+    inicio: inicio,
+    fin: fin,
+    inicioKey: keyMesPDF(inicio),
+    finKey: keyMesPDF(fin),
+    totalMeses: totalMeses
+  };
+}
+
+async function generarHistorialPDFDocente(periodoSeleccionado) {
   if (!selectedPersonID) {
     alert("Primero selecciona un docente.");
     return;
@@ -2140,7 +2217,7 @@ async function generarHistorialPDFDocente() {
     }
 
     const respuesta = await obtenerHistorialPersonaPromesaPDF(selectedPersonID);
-    await construirYMostrarPDFHistorialDocente(respuesta || {});
+    await construirYMostrarPDFHistorialDocente(respuesta || {}, periodoSeleccionado || null);
   } catch (error) {
     console.error("Error generando PDF SEC2:", error);
     alert("No fue posible generar el PDF: " + obtenerMensajeError(error));
@@ -2154,21 +2231,40 @@ async function generarHistorialPDFDocente() {
   }
 }
 
+async function generarHistorialPDFDesdePeriodo() {
+  const periodo = obtenerPeriodoSeleccionadoPDF();
+  if (!periodo) return;
+
+  const status = document.getElementById("pdfPeriodoStatus");
+  if (status) {
+    status.className = "status-box show";
+    status.textContent = "Generando PDF del periodo seleccionado...";
+  }
+
+  await generarHistorialPDFDocente(periodo);
+
+  if (status) {
+    status.className = "status-box";
+    status.textContent = "";
+  }
+}
+
 function obtenerHistorialPersonaPromesaPDF(idPersona) {
   return new Promise(function(resolve, reject) {
     API.obtenerHistorialPersona(idPersona, "todas", resolve, reject);
   });
 }
 
-async function construirYMostrarPDFHistorialDocente(respuesta) {
+async function construirYMostrarPDFHistorialDocente(respuesta, periodoSeleccionado) {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
 
   const persona = respuesta.persona || {};
-  const incidencias = normalizarIncidenciasPDF(respuesta.incidencias || []);
+  const incidenciasTodas = normalizarIncidenciasPDF(respuesta.incidencias || []);
+  const incidencias = periodoSeleccionado ? filtrarIncidenciasPorPeriodoMesPDF(incidenciasTodas, periodoSeleccionado) : incidenciasTodas;
   const logoData = await cargarImagenPDF(SEC2_PDF_LOGO_URL);
-  const metricas = calcularMetricasPDF(incidencias);
-  const periodo = obtenerPeriodoPDF(incidencias);
+  const metricas = calcularMetricasPDF(incidencias, periodoSeleccionado);
+  const periodo = periodoSeleccionado ? obtenerPeriodoTextoSeleccionadoPDF(periodoSeleccionado) : obtenerPeriodoPDF(incidencias);
 
   dibujarEncabezadoPDF(doc, logoData, persona, periodo);
   let y = 118;
@@ -2241,6 +2337,9 @@ async function construirYMostrarPDFHistorialDocente(respuesta) {
   y = dibujarResumenTotalPDF(doc, metricas, y);
   y = asegurarEspacioPDF(doc, y + 18, 190, logoData, persona, periodo);
   dibujarGraficoMesesPDF(doc, metricas.meses, y + 10);
+  y = y + 158;
+  y = asegurarEspacioPDF(doc, y, 76, logoData, persona, periodo);
+  dibujarFirmasPDF(doc, y);
 
   agregarPieYPaginacionPDF(doc);
 
@@ -2271,9 +2370,9 @@ function normalizarIncidenciasPDF(incidencias) {
   });
 }
 
-function calcularMetricasPDF(incidencias) {
+function calcularMetricasPDF(incidencias, periodoSeleccionado) {
   const tipos = crearConteoTiposEstadisticaPDF();
-  const meses = crearRangoMesesGraficaPDF(new Date(), 4, 4);
+  const meses = periodoSeleccionado ? crearRangoMesesSeleccionPDF(periodoSeleccionado) : crearRangoMesesGraficaPDF(new Date(), 4, 4);
   let totalDias = 0;
 
   incidencias.forEach(function(i) {
@@ -2350,6 +2449,68 @@ function crearRangoMesesGraficaPDF(fechaReferencia, mesesAntes, mesesDespues) {
   return salida;
 }
 
+function fechaDesdeKeyMesPDF(key) {
+  const partes = String(key || "").split("-");
+  if (partes.length !== 2) return null;
+  const anio = Number(partes[0]);
+  const mes = Number(partes[1]);
+  if (!anio || !mes || mes < 1 || mes > 12) return null;
+  return new Date(anio, mes - 1, 1);
+}
+
+function diferenciaMesesPDF(inicio, fin) {
+  return (fin.getFullYear() - inicio.getFullYear()) * 12 + (fin.getMonth() - inicio.getMonth());
+}
+
+function crearRangoMesesSeleccionPDF(periodoSeleccionado) {
+  const salida = {};
+  if (!periodoSeleccionado || !periodoSeleccionado.inicio || !periodoSeleccionado.fin) return salida;
+
+  const cursor = new Date(periodoSeleccionado.inicio.getFullYear(), periodoSeleccionado.inicio.getMonth(), 1);
+  const limite = new Date(periodoSeleccionado.fin.getFullYear(), periodoSeleccionado.fin.getMonth(), 1);
+
+  while (cursor <= limite) {
+    salida[keyMesPDF(cursor)] = 0;
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return salida;
+}
+
+function obtenerPeriodoTextoSeleccionadoPDF(periodoSeleccionado) {
+  return {
+    inicio: etiquetaMesAnioPDF(periodoSeleccionado.inicio),
+    fin: etiquetaMesAnioPDF(periodoSeleccionado.fin)
+  };
+}
+
+function etiquetaMesAnioPDF(fecha) {
+  if (!fecha) return "Sin registros";
+  const mes = nombreMesCortoPDF(fecha.getMonth());
+  return `${mes}/${fecha.getFullYear()}`;
+}
+
+function nombreMesLargoPDF(mesIndex) {
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  return meses[mesIndex] || "";
+}
+
+function filtrarIncidenciasPorPeriodoMesPDF(incidencias, periodoSeleccionado) {
+  if (!periodoSeleccionado) return incidencias;
+  const inicio = new Date(periodoSeleccionado.inicio.getFullYear(), periodoSeleccionado.inicio.getMonth(), 1);
+  const fin = new Date(periodoSeleccionado.fin.getFullYear(), periodoSeleccionado.fin.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  return incidencias.filter(function(incidencia) {
+    const fechasReales = obtenerFechasRealesIncidenciaPDF(incidencia).filter(Boolean);
+    if (fechasReales.some(function(fecha) { return fecha >= inicio && fecha <= fin; })) return true;
+
+    const a = parseFechaLocalPDF(incidencia.FechaInicio);
+    const b = parseFechaLocalPDF(incidencia.FechaFin || incidencia.FechaInicio);
+    if (!a || !b) return false;
+    return a <= fin && b >= inicio;
+  });
+}
+
 function obtenerPeriodoPDF(incidencias) {
   const fechas = [];
   incidencias.forEach(function(i) {
@@ -2363,43 +2524,63 @@ function obtenerPeriodoPDF(incidencias) {
   return { inicio: formatearFechaDatePDF(fechas[0]), fin: formatearFechaDatePDF(fechas[fechas.length - 1]) };
 }
 
+function obtenerTextoPeriodoReportePDF(periodo) {
+  const inicio = periodo && periodo.inicio ? periodo.inicio : "Sin registros";
+  const fin = periodo && periodo.fin ? periodo.fin : "Sin registros";
+  if (inicio === "Sin registros" && fin === "Sin registros") return "Sin registros";
+  if (inicio === fin) return inicio;
+  return `${inicio} al ${fin}`;
+}
+
 function dibujarEncabezadoPDF(doc, logoData, persona, periodo) {
   const w = doc.internal.pageSize.getWidth();
   doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, w, 108, "F");
+  doc.rect(0, 0, w, 112, "F");
 
   if (logoData) {
-    try { doc.addImage(logoData, "PNG", 20, 14, 68, 68); } catch (e) {}
+    try { doc.addImage(logoData, "PNG", 20, 16, 64, 64); } catch (e) {}
   }
 
-  /* Encabezado institucional solicitado: sin lema y sin línea roja superior. */
-  doc.setTextColor(5, 31, 89);
+  /* Encabezado institucional en azul, separado del bloque derecho del reporte. */
+  const azul = [5, 31, 89];
+  const centroInstitucionalX = 250;
+  const bloqueDerechoX = w - 28;
+  const bloqueDerechoCentroX = w - 88;
+
+  doc.setTextColor(azul[0], azul[1], azul[2]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.2);
-  doc.text(SEC2_PDF_HEADER_LINEAS[0], w / 2, 18, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[1], w / 2, 32, { align: "center" });
+  doc.setFontSize(9.8);
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroInstitucionalX, 18, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroInstitucionalX, 31, { align: "center" });
 
-  doc.setFontSize(10.2);
-  doc.text(SEC2_PDF_HEADER_LINEAS[2], w / 2, 48, { align: "center" });
-  doc.text(SEC2_PDF_HEADER_LINEAS[3], w / 2, 62, { align: "center" });
+  doc.setFontSize(9.4);
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroInstitucionalX, 47, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroInstitucionalX, 61, { align: "center" });
 
-  doc.setFontSize(8.4);
-  doc.text(SEC2_PDF_HEADER_LINEAS[4], w / 2, 76, { align: "center" });
+  doc.setFontSize(8.2);
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroInstitucionalX, 76, { align: "center" });
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(5, 31, 89);
-  doc.text("REPORTE DE INCIDENCIAS", w - 24, 23, { align: "right" });
+  doc.setFontSize(8.8);
+  doc.text("REPORTE DE INCIDENCIAS", bloqueDerechoCentroX, 21, { align: "center" });
+
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.9);
-  doc.text("Resumen del docente", w - 24, 36, { align: "right" });
+  doc.setFontSize(7.1);
+  doc.text("Resumen del docente", bloqueDerechoCentroX, 34, { align: "center" });
 
-  const etiquetaX = w - 214;
-  const valorX = w - 24;
-  doc.text("Fecha de generación:", etiquetaX, 55);
-  doc.text(formatearFechaHoraPDF(new Date()), valorX, 55, { align: "right" });
-  doc.text("Periodo del reporte:", etiquetaX, 70);
-  doc.text(`${periodo.inicio} al ${periodo.fin}`, valorX, 70, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.9);
+  doc.text("Fecha de generación:", bloqueDerechoCentroX, 51, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text(formatearFechaHoraPDF(new Date()), bloqueDerechoCentroX, 62, { align: "center" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.9);
+  doc.text("Periodo del reporte:", bloqueDerechoCentroX, 77, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text(obtenerTextoPeriodoReportePDF(periodo), bloqueDerechoCentroX, 88, { align: "center" });
 }
 
 
@@ -2710,6 +2891,34 @@ function asegurarEspacioPDF(doc, y, alto, logoData, persona, periodo) {
     return 118;
   }
   return y;
+}
+
+function dibujarFirmasPDF(doc, y) {
+  const w = doc.internal.pageSize.getWidth();
+  const margen = 52;
+  const anchoLinea = 180;
+  const izquierdaX = margen;
+  const derechaX = w - margen - anchoLinea;
+  const lineaY = y + 34;
+
+  doc.setDrawColor(5, 31, 89);
+  doc.setLineWidth(0.9);
+  doc.line(izquierdaX, lineaY, izquierdaX + anchoLinea, lineaY);
+  doc.line(derechaX, lineaY, derechaX + anchoLinea, lineaY);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.setTextColor(5, 31, 89);
+  doc.text("Director(a) o Subdirector(a)", izquierdaX + anchoLinea / 2, lineaY + 13, { align: "center" });
+  doc.text("Docente", derechaX + anchoLinea / 2, lineaY + 13, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.7);
+  doc.setTextColor(75, 85, 99);
+  doc.text("Nombre y firma", izquierdaX + anchoLinea / 2, lineaY + 24, { align: "center" });
+  doc.text("Nombre y firma", derechaX + anchoLinea / 2, lineaY + 24, { align: "center" });
+
+  return lineaY + 28;
 }
 
 function agregarPieYPaginacionPDF(doc) {
