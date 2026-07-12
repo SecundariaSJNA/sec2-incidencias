@@ -1,4 +1,4 @@
-/* SEC2_APP_V50_CONFIG_PASSWORD_GALA_20260712 */
+/* SEC2_APP_V51_PDF_MI_PERFIL_TODOS_ROLES_20260712 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -918,7 +918,7 @@ function renderResumenPersona(respuesta) {
       ${optionCard("Historial completo", descripcionHistorial, "green", "history", "cargarHistorialPersona('todas')")}
       ${optionCard("Próximas incidencias", "Consultar incidencias futuras programadas.", "blue", "calendar", "cargarHistorialPersona('proximas')")}
       ${optionCard("Estadística mensual", "Consultar gráfica mensual por tipo de incidencia.", "orange", "report", "abrirEstadisticaMensual()")}
-      ${debeMostrarBotonPDFHistorial() ? optionCard("Historial en PDF", "Seleccionar periodo y generar reporte descargable.", "blue", "report", "abrirSelectorPeriodoPDF()") : ""}
+      ${debeMostrarBotonPDFHistorial() ? optionCard("Generar PDF", "Seleccionar mes inicial y mes final para generar reporte descargable.", "blue", "report", "abrirSelectorPeriodoPDF()") : ""}
     </article>
     <section class="info-card">
       <div class="info-icon">i</div>
@@ -3001,7 +3001,8 @@ const SEC2_PDF_HEADER_LINEAS = [
 
 function debeMostrarBotonPDFHistorial() {
   const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
-  return !profileMode && (rol === "Direccion" || rol === "Prefectura" || rol === "Correspondencia");
+  if (profileMode) return true;
+  return rol === "Direccion";
 }
 
 
@@ -3283,6 +3284,13 @@ function crearNombreArchivoComprobantePDF(incidencia) {
 function abrirSelectorPeriodoPDF() {
   if (!selectedPersonID) {
     alert("Primero selecciona un docente.");
+    return;
+  }
+
+  const rol = String(currentModule || sessionStorage.getItem("currentActiveModule") || "");
+  const idSesion = sessionStorage.getItem("userIDAcceso") || obtenerIdSesionSegura();
+  if (rol !== "Direccion" && String(selectedPersonID) !== String(idSesion)) {
+    alert("Solo Dirección puede generar PDF de otros usuarios. Este perfil solo permite generar el reporte propio.");
     return;
   }
 
@@ -4249,4 +4257,3 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
-
