@@ -1,4 +1,4 @@
-/* SEC2_APP_V53_CONFIG_LIMPIEZA_PERSONAL_ELIMINADOS_LOGIN_20260712 */
+/* SEC2_APP_V54_NOTIFICACIONES_SUPABASE_DIRECTO_FIX_20260712 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -861,7 +861,7 @@ function etiquetaMesAnioLegibleSEC2(keyMes) {
 }
 
 async function obtenerDatosBaseSEC2(periodo) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase para descargar la base.");
 
   const usuarios = await seleccionarTablaSupabaseSEC2(cliente, ["usuarios", "Usuarios"]);
@@ -1483,7 +1483,7 @@ async function ejecutarLimpiezaConfirmadaSEC2(tipo) {
 }
 
 async function eliminarTodoTablaSEC2(nombres, opcional) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   let ultimoError = null;
@@ -1648,7 +1648,7 @@ function generarPasswordSEC2(nombre, paterno, materno) {
 }
 
 async function insertarUsuarioSEC2(usuario) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   const payloads = [
@@ -1718,7 +1718,7 @@ async function cancelarAltaUsuarioSEC2() {
 }
 
 async function eliminarUsuarioPorIDAccesoSEC2(usuario) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   const filtros = [
@@ -1788,7 +1788,7 @@ async function abrirDesactivarDocenteSEC2() {
 }
 
 async function obtenerUsuariosConfigSEC2() {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
   const usuarios = await seleccionarTablaSupabaseSEC2(cliente, ["usuarios", "Usuarios"]);
   return (usuarios || []).filter(function(u) {
@@ -1852,7 +1852,7 @@ async function ejecutarDesactivarDocenteSEC2(id) {
 }
 
 async function actualizarActivoUsuarioSEC2(id, valor) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   const intentos = [
@@ -1923,7 +1923,7 @@ async function exportarEliminadosSEC2(formato) {
 }
 
 async function obtenerEliminadosSEC2() {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   return await seleccionarTablaSupabaseSEC2(cliente, ["incidencias_eliminadas", "eliminados", "auditoria_eliminados", "Eliminados"], true);
@@ -2803,7 +2803,7 @@ function actualizarIncidenciaSEC2(idIncidencia, datos, ok, fail) {
 }
 
 async function actualizarIncidenciaDirectoSupabaseSEC2(idIncidencia, datos) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase para editar la incidencia.");
 
   const payloads = [
@@ -3064,8 +3064,24 @@ function ejecutarEnvioNotificacion() {
     document.getElementById("notifyMessage").value = "";
   }).catch(function(error) {
     status.className = "status-box show error";
-    status.textContent = obtenerMensajeError(error);
+    status.textContent = obtenerMensajeNotificacionSEC2(error);
   });
+}
+
+
+function obtenerMensajeNotificacionSEC2(error) {
+  const msg = obtenerMensajeError(error);
+  const t = String(msg || "").toLowerCase();
+
+  if (t.includes("no migrado") || t.includes("no se detectó cliente supabase")) {
+    return "No se pudo conectar directo a Supabase para notificaciones. Recarga la app y verifica que js/config.js y js/supabase.js estén publicados.";
+  }
+
+  if (t.includes("could not find the table") || t.includes("schema cache") || t.includes("notificaciones")) {
+    return "Supabase no encontró la tabla notificaciones. Ejecuta el SQL de notificaciones o verifica que la tabla exista como public.notificaciones.";
+  }
+
+  return msg;
 }
 
 function abrirNotificacionesEnviadas() {
@@ -3177,27 +3193,15 @@ async function guardarNotificacionSEC2(usuario, mensaje) {
   const directError = await intentarGuardarNotificacionSupabaseSEC2(usuario, mensaje);
   if (!directError) return true;
 
-  // Respaldo por API existente, por si el módulo ya fue migrado en api.js.
-  return new Promise(function(resolve, reject) {
-    if (!API.guardarNotificacion) {
-      reject(directError);
-      return;
-    }
-
-    const id = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
-    API.guardarNotificacion({ IDUsuario: id, Mensaje: mensaje }, resolve, function(error) {
-      const texto = String(error || "");
-      if (texto.toLowerCase().includes("no migrado")) {
-        reject(directError || error);
-      } else {
-        reject(error || directError);
-      }
-    });
-  });
+  // SEC2_NOTIF_FIX_V54:
+  // No usar API.guardarNotificacion porque ese módulo viejo devuelve
+  // "Enviar notificaciones aún no migrado a Supabase".
+  // A partir de aquí el guardado debe ir directo a Supabase.
+  throw directError;
 }
 
 async function intentarGuardarNotificacionSupabaseSEC2(usuario, mensaje) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) return new Error("No se detectó cliente Supabase para notificaciones.");
 
   const idUsuario = usuario.IDAcceso || usuario.id_acceso || usuario.idAcceso || usuario.ID || usuario.id || "";
@@ -3296,7 +3300,7 @@ function obtenerNotificacionesEnviadasSEC2() {
 }
 
 async function obtenerNotificacionesDesdeSupabaseSEC2(modo) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase para notificaciones.");
 
   let ultimoError = null;
@@ -3353,7 +3357,7 @@ async function obtenerDetalleNotificacionSEC2(idNotificacion) {
 }
 
 async function obtenerDetalleNotificacionSupabaseSEC2(idNotificacion) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   const lista = await obtenerNotificacionesDesdeSupabaseSEC2(currentModule === "Direccion" ? "enviadas" : "recibidas");
@@ -3366,7 +3370,7 @@ async function obtenerDetalleNotificacionSupabaseSEC2(idNotificacion) {
 }
 
 async function marcarNotificacionLeidaSEC2(idNotificacion) {
-  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  const cliente = await obtenerClienteSupabaseNotificacionesAsyncSEC2();
   if (!cliente) throw new Error("No se detectó cliente Supabase.");
 
   const fecha = new Date().toISOString();
@@ -3454,6 +3458,76 @@ function obtenerGlobalSeguroSEC2(nombre) {
     return "";
   }
 }
+
+
+async function obtenerClienteSupabaseNotificacionesAsyncSEC2() {
+  const directo = obtenerClienteSupabaseNotificacionesSEC2();
+  if (directo) return directo;
+
+  const escaneado = buscarClienteSupabaseEnWindowSEC2();
+  if (escaneado) return escaneado;
+
+  const credenciales = await leerCredencialesSupabaseDesdeArchivosSEC2();
+  if (
+    credenciales &&
+    credenciales.url &&
+    credenciales.key &&
+    window.supabase &&
+    typeof window.supabase.createClient === "function"
+  ) {
+    window.supabaseClientSEC2 = window.supabase.createClient(credenciales.url, credenciales.key);
+    return window.supabaseClientSEC2;
+  }
+
+  return null;
+}
+
+function buscarClienteSupabaseEnWindowSEC2() {
+  try {
+    const nombres = Object.keys(window || {});
+    for (const nombre of nombres) {
+      try {
+        const valor = window[nombre];
+        if (valor && typeof valor === "object" && typeof valor.from === "function") {
+          window.supabaseClientSEC2 = valor;
+          return valor;
+        }
+      } catch (errorInterno) {}
+    }
+  } catch (error) {}
+  return null;
+}
+
+async function leerCredencialesSupabaseDesdeArchivosSEC2() {
+  const cache = window.SEC2_SUPABASE_CREDENTIALS_CACHE;
+  if (cache && cache.url && cache.key) return cache;
+
+  const candidatos = ["js/config.js", "js/supabase.js", "config.js", "supabase.js"];
+  let textoTotal = "";
+
+  for (const ruta of candidatos) {
+    try {
+      const respuesta = await fetch(ruta, { cache: "no-store" });
+      if (respuesta && respuesta.ok) {
+        textoTotal += "\n" + await respuesta.text();
+      }
+    } catch (error) {}
+  }
+
+  const urlMatch = textoTotal.match(/https:\/\/[a-zA-Z0-9.-]+\.supabase\.co/);
+  const keyMatch = textoTotal.match(/eyJ[a-zA-Z0-9_\-]{80,}/);
+
+  if (urlMatch && keyMatch) {
+    window.SEC2_SUPABASE_CREDENTIALS_CACHE = {
+      url: urlMatch[0],
+      key: keyMatch[0]
+    };
+    return window.SEC2_SUPABASE_CREDENTIALS_CACHE;
+  }
+
+  return null;
+}
+
 
 function normalizarNotificacionSEC2(n) {
   n = n || {};
@@ -5449,4 +5523,3 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
-
