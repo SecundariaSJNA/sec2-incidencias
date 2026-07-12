@@ -1,4 +1,4 @@
-/* SEC2_APP_V51_PDF_MI_PERFIL_TODOS_ROLES_20260712 */
+/* SEC2_APP_V53_CONFIG_LIMPIEZA_PERSONAL_ELIMINADOS_LOGIN_20260712 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -19,6 +19,8 @@ const TEST_USERS = {
 
 const SEC2_CONFIG_PASSWORD = "$Gala33C1ex";
 let direccionSubmenuActivoSEC2 = "";
+let configuracionAutorizadaSEC2 = false;
+let ultimoUsuarioCreadoConfigSEC2 = null;
 
 const TURNOS_TEXTO = {
   "A": "Ambos",
@@ -687,13 +689,12 @@ function openOption(optionName) {
   if (optionName === "Consulta de fechas") return abrirConsultaFechas();
   if (optionName === "Historial" || optionName === "Historial general") return abrirSelectorHistorial();
   if (optionName === "Notificaciones") return abrirNotificaciones();
-  if (
-    optionName === "Descargar base de datos" ||
-    optionName === "Limpiar bandeja de mensajes" ||
-    optionName === "Limpiar base de incidencias" ||
-    optionName === "Desactivar docente" ||
-    optionName === "Exportar eliminados"
-  ) return abrirPantallaConfiguracionPendienteSEC2(optionName);
+  if (optionName === "Descargar base de datos") return abrirDescargarBaseDatosSEC2();
+  if (optionName === "Limpiar bandeja de mensajes") return abrirAdvertenciaLimpiezaSEC2("mensajes");
+  if (optionName === "Limpiar base de incidencias") return abrirAdvertenciaLimpiezaSEC2("incidencias");
+  if (optionName === "Activar docente") return abrirActivarDocenteSEC2();
+  if (optionName === "Desactivar docente") return abrirDesactivarDocenteSEC2();
+  if (optionName === "Exportar eliminados") return abrirExportarEliminadosSEC2();
 }
 
 function abrirPantallaConfiguracionPendienteSEC2(nombreAccion) {
@@ -710,6 +711,589 @@ function abrirPantallaConfiguracionPendienteSEC2(nombreAccion) {
   showScreen("dataScreen");
   inicializarIconos();
 }
+
+
+function abrirDescargarBaseDatosSEC2() {
+  if (currentModule !== "Direccion") {
+    alert("Solo Dirección puede descargar la base de datos.");
+    return;
+  }
+
+  document.getElementById("dataTitle").textContent = "Descargar base de datos";
+  document.getElementById("dataSubtitle").textContent = "Respaldos por ciclo o por rango de meses.";
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-blue";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "report");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card">
+      <h2 class="section-title">Ciclo escolar 2026-2027</h2>
+      <p class="data-card-text">Periodo automático: <strong>01/Ago/2026 al 31/Jul/2027</strong>.</p>
+      <div style="display:grid;gap:10px;margin-top:12px;">
+        <button class="primary-button" onclick="descargarBaseDatosSEC2('ciclo','excel')">Descargar Excel</button>
+        <button class="secondary-button" onclick="descargarBaseDatosSEC2('ciclo','pdf')">Descargar PDF</button>
+      </div>
+    </article>
+
+    <article class="data-card">
+      <h2 class="section-title">Rango de meses</h2>
+      <p class="data-card-text">Elige mes inicial y mes final. Máximo un año de rango.</p>
+      <div class="form-row">
+        <div class="form-icon" data-icon="calendar"></div>
+        <div>
+          <label for="baseMesInicioSEC2">Mes inicial</label>
+          <input id="baseMesInicioSEC2" type="month" value="2026-08">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-icon" data-icon="calendar"></div>
+        <div>
+          <label for="baseMesFinSEC2">Mes final</label>
+          <input id="baseMesFinSEC2" type="month" value="2027-07">
+        </div>
+      </div>
+      <div style="display:grid;gap:10px;margin-top:12px;">
+        <button class="primary-button" onclick="descargarBaseDatosSEC2('rango','excel')">Descargar Excel</button>
+        <button class="secondary-button" onclick="descargarBaseDatosSEC2('rango','pdf')">Descargar PDF</button>
+      </div>
+    </article>
+
+    <div id="baseDatosStatusSEC2" class="status-box"></div>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+async function descargarBaseDatosSEC2(tipoPeriodo, formato) {
+  const status = document.getElementById("baseDatosStatusSEC2");
+  try {
+    if (status) {
+      status.className = "status-box show";
+      status.textContent = formato === "excel" ? "Preparando Excel..." : "Preparando PDF...";
+    }
+
+    const periodo = obtenerPeriodoDescargaBaseSEC2(tipoPeriodo);
+    if (!periodo) return;
+
+    const datos = await obtenerDatosBaseSEC2(periodo);
+
+    if (formato === "excel") {
+      generarExcelBaseDatosSEC2(datos, periodo);
+    } else {
+      await generarPDFBaseDatosSEC2(datos, periodo);
+    }
+
+    if (status) {
+      status.className = "status-box show ok";
+      status.textContent = formato === "excel" ? "Excel generado correctamente." : "PDF generado correctamente.";
+    }
+  } catch (error) {
+    console.error("Error descargando base de datos:", error);
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
+    } else {
+      alert(obtenerMensajeError(error));
+    }
+  }
+}
+
+function obtenerPeriodoDescargaBaseSEC2(tipoPeriodo) {
+  if (tipoPeriodo === "ciclo") {
+    return {
+      etiqueta: "Ciclo escolar 2026-2027",
+      inicio: "2026-08-01",
+      fin: "2027-07-31",
+      tipo: "ciclo"
+    };
+  }
+
+  const mesInicio = document.getElementById("baseMesInicioSEC2") ? document.getElementById("baseMesInicioSEC2").value : "";
+  const mesFin = document.getElementById("baseMesFinSEC2") ? document.getElementById("baseMesFinSEC2").value : "";
+
+  if (!/^\d{4}-\d{2}$/.test(mesInicio) || !/^\d{4}-\d{2}$/.test(mesFin)) {
+    alert("Selecciona mes inicial y mes final.");
+    return null;
+  }
+
+  const inicio = `${mesInicio}-01`;
+  const fin = ultimoDiaMesSEC2(mesFin);
+  const diferencia = diferenciaMesesClavesSEC2(mesInicio, mesFin);
+
+  if (diferencia < 0) {
+    alert("El mes final no puede ser anterior al mes inicial.");
+    return null;
+  }
+
+  if (diferencia > 11) {
+    alert("El rango máximo permitido es de 12 meses.");
+    return null;
+  }
+
+  return {
+    etiqueta: mesInicio === mesFin ? `Mes ${etiquetaMesAnioLegibleSEC2(mesInicio)}` : `${etiquetaMesAnioLegibleSEC2(mesInicio)} a ${etiquetaMesAnioLegibleSEC2(mesFin)}`,
+    inicio,
+    fin,
+    tipo: "rango"
+  };
+}
+
+function ultimoDiaMesSEC2(keyMes) {
+  const partes = String(keyMes).split("-");
+  const y = Number(partes[0]);
+  const m = Number(partes[1]);
+  const fecha = new Date(y, m, 0);
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
+
+function diferenciaMesesClavesSEC2(inicio, fin) {
+  const a = String(inicio).split("-").map(Number);
+  const b = String(fin).split("-").map(Number);
+  return (b[0] - a[0]) * 12 + (b[1] - a[1]);
+}
+
+function etiquetaMesAnioLegibleSEC2(keyMes) {
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const partes = String(keyMes).split("-");
+  const y = partes[0];
+  const m = Number(partes[1]) - 1;
+  return `${meses[m] || partes[1]} ${y}`;
+}
+
+async function obtenerDatosBaseSEC2(periodo) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase para descargar la base.");
+
+  const usuarios = await seleccionarTablaSupabaseSEC2(cliente, ["usuarios", "Usuarios"]);
+  const tipos = await seleccionarTablaSupabaseSEC2(cliente, ["tipos_incidencia", "TiposIncidencia", "tipo_incidencia"]);
+  const incidenciasRaw = await seleccionarTablaSupabaseSEC2(cliente, ["incidencias", "Incidencias"]);
+  const oficialesRaw = await seleccionarTablaSupabaseSEC2(cliente, ["permiso_oficial_fechas", "permisos_oficiales_fechas", "PermisoOficialFechas"]);
+  const notificaciones = await seleccionarTablaSupabaseSEC2(cliente, ["notificaciones", "Notificaciones"], true);
+
+  const mapaUsuarios = crearMapaUsuariosBaseSEC2(usuarios);
+  const mapaTipos = crearMapaTiposBaseSEC2(tipos);
+  const mapaOficiales = crearMapaOficialesBaseSEC2(oficialesRaw);
+
+  const incidencias = (incidenciasRaw || [])
+    .map(function(row) {
+      return normalizarIncidenciaBaseSEC2(row, mapaUsuarios, mapaTipos, mapaOficiales);
+    })
+    .filter(function(incidencia) {
+      return incidenciaCaeEnPeriodoBaseSEC2(incidencia, periodo.inicio, periodo.fin);
+    })
+    .sort(function(a, b) {
+      return String(fechaOrdenIncidenciaBaseSEC2(a)).localeCompare(String(fechaOrdenIncidenciaBaseSEC2(b)));
+    });
+
+  return {
+    periodo,
+    usuarios: usuarios || [],
+    tipos: tipos || [],
+    incidenciasRaw: incidenciasRaw || [],
+    oficialesRaw: oficialesRaw || [],
+    notificaciones: notificaciones || [],
+    incidencias,
+    resumen: calcularResumenBaseSEC2(incidencias)
+  };
+}
+
+async function seleccionarTablaSupabaseSEC2(cliente, nombres, opcional) {
+  let ultimoError = null;
+  for (const nombre of nombres) {
+    try {
+      const resultado = await cliente.from(nombre).select("*").range(0, 9999);
+      if (!resultado.error) return resultado.data || [];
+      ultimoError = resultado.error;
+    } catch (error) {
+      ultimoError = error;
+    }
+  }
+
+  if (opcional) return [];
+  throw ultimoError || new Error("No se pudo leer tabla: " + nombres.join(" / "));
+}
+
+function crearMapaUsuariosBaseSEC2(usuarios) {
+  const mapa = {};
+  (usuarios || []).forEach(function(u) {
+    const claves = [
+      u.id, u.ID, u.IDUsuario, u.id_usuario, u.usuario_id,
+      u.IDAcceso, u.id_acceso, u.idacceso, u.IdAcceso
+    ].filter(Boolean);
+    claves.forEach(function(clave) { mapa[String(clave)] = u; });
+  });
+  return mapa;
+}
+
+function crearMapaTiposBaseSEC2(tipos) {
+  const mapa = {};
+  (tipos || []).forEach(function(t) {
+    const claves = [t.id, t.ID, t.id_tipo, t.tipo_incidencia_id, t.IDTipoIncidencia].filter(Boolean);
+    claves.forEach(function(clave) { mapa[String(clave)] = t; });
+  });
+  return mapa;
+}
+
+function crearMapaOficialesBaseSEC2(filas) {
+  const mapa = {};
+  (filas || []).forEach(function(f) {
+    const id = String(f.incidencia_id || f.id_incidencia || f.IDIncidencia || f.incidencia || f.folio || "");
+    if (!id) return;
+    if (!mapa[id]) mapa[id] = [];
+    mapa[id].push(f);
+  });
+  Object.keys(mapa).forEach(function(id) {
+    mapa[id].sort(function(a, b) {
+      const na = Number(a.numero || a.Numero || a.orden || a.Orden || a.no || a.No || 0);
+      const nb = Number(b.numero || b.Numero || b.orden || b.Orden || b.no || b.No || 0);
+      return na - nb;
+    });
+  });
+  return mapa;
+}
+
+function normalizarIncidenciaBaseSEC2(row, mapaUsuarios, mapaTipos, mapaOficiales) {
+  row = row || {};
+  const idInc = row.IDIncidencia || row.id_incidencia || row.id || row.ID || "";
+  const idUsuario = row.IDUsuario || row.id_usuario || row.usuario_id || row.idacceso || row.id_acceso || row.IDAcceso || "";
+  const usuario = mapaUsuarios[String(idUsuario)] || {};
+  const tipoID = row.tipo_incidencia_id || row.id_tipo_incidencia || row.IDTipoIncidencia || row.tipo_id || "";
+  const tipoObj = mapaTipos[String(tipoID)] || {};
+  const oficiales = mapaOficiales[String(idInc)] || mapaOficiales[String(row.folio || row.Folio || "")] || [];
+
+  const incidencia = {
+    IDIncidencia: idInc,
+    Folio: row.Folio || row.folio || row.IDIncidencia || row.id || "",
+    IDUsuario: idUsuario || usuario.IDAcceso || usuario.id_acceso || "",
+    Nombre: row.Nombre || row.nombre || usuario.Nombre || usuario.nombre || "",
+    Apellidos: row.Apellidos || row.apellidos || usuario.Apellidos || usuario.apellidos || "",
+    Turno: row.Turno || row.turno || usuario.Turno || usuario.turno || "",
+    TipoIncidencia: row.TipoIncidencia || row.tipo_incidencia || row.tipo || row.nombre_tipo || tipoObj.Nombre || tipoObj.nombre || tipoObj.tipo || "Incidencia",
+    FechaInicio: row.FechaInicio || row.fecha_inicio || row.fechaInicio || row.fecha || "",
+    FechaFin: row.FechaFin || row.fecha_fin || row.fechaFin || row.FechaInicio || row.fecha_inicio || "",
+    FechaOficial1: row.FechaOficial1 || row.fecha_oficial_1 || row.fechaOficial1 || "",
+    FechaOficial2: row.FechaOficial2 || row.fecha_oficial_2 || row.fechaOficial2 || "",
+    FechaOficial3: row.FechaOficial3 || row.fecha_oficial_3 || row.fechaOficial3 || "",
+    Uso1Fecha: row.Uso1Fecha || row.uso_1_fecha || row.uso1_fecha || row.uso1Fecha || "",
+    Uso2Fecha: row.Uso2Fecha || row.uso_2_fecha || row.uso2_fecha || row.uso2Fecha || "",
+    Uso3Fecha: row.Uso3Fecha || row.uso_3_fecha || row.uso3_fecha || row.uso3Fecha || "",
+    Observaciones: row.Observaciones || row.observaciones || "",
+    RegistradoPor: row.RegistradoPor || row.registrado_por || row.registrado_por_id || row.sello || "",
+    FechaRegistro: row.FechaRegistro || row.fecha_registro || row.created_at || row.CreatedAt || "",
+    raw: row
+  };
+
+  oficiales.forEach(function(f, index) {
+    const n = Number(f.numero || f.Numero || f.orden || f.Orden || index + 1);
+    const oficial = f.fecha_oficial || f.FechaOficial || f.fecha || f.Fecha || "";
+    const uso = f.fecha_uso || f.FechaUso || f.uso_fecha || f.UsoFecha || "";
+    if (n >= 1 && n <= 3) {
+      if (!incidencia[`FechaOficial${n}`]) incidencia[`FechaOficial${n}`] = oficial;
+      if (!incidencia[`Uso${n}Fecha`]) incidencia[`Uso${n}Fecha`] = uso;
+    }
+  });
+
+  return incidencia;
+}
+
+function incidenciaCaeEnPeriodoBaseSEC2(i, inicio, fin) {
+  const fechas = [
+    i.FechaInicio, i.FechaFin,
+    i.FechaOficial1, i.FechaOficial2, i.FechaOficial3,
+    i.Uso1Fecha, i.Uso2Fecha, i.Uso3Fecha
+  ].filter(Boolean).map(fechaISOBaseSEC2).filter(Boolean);
+
+  if (!fechas.length) return false;
+
+  const inicioISO = fechaISOBaseSEC2(inicio);
+  const finISO = fechaISOBaseSEC2(fin);
+  const fi = fechaISOBaseSEC2(i.FechaInicio) || fechas[0];
+  const ff = fechaISOBaseSEC2(i.FechaFin) || fi;
+
+  if (fi <= finISO && ff >= inicioISO) return true;
+  return fechas.some(function(f) { return f >= inicioISO && f <= finISO; });
+}
+
+function fechaISOBaseSEC2(valor) {
+  if (!valor) return "";
+  const texto = String(valor);
+  const m = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const f = new Date(valor);
+  if (Number.isNaN(f.getTime())) return "";
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+}
+
+function fechaOrdenIncidenciaBaseSEC2(i) {
+  return fechaISOBaseSEC2(i.FechaInicio || i.FechaOficial1 || i.Uso1Fecha || i.FechaRegistro) || "9999-12-31";
+}
+
+function calcularResumenBaseSEC2(incidencias) {
+  const porTipo = {};
+  const porDocente = {};
+  (incidencias || []).forEach(function(i) {
+    const tipo = i.TipoIncidencia || "Incidencia";
+    const docente = `${i.Apellidos || ""} ${i.Nombre || ""}`.trim() || "Sin nombre";
+    porTipo[tipo] = (porTipo[tipo] || 0) + 1;
+    porDocente[docente] = (porDocente[docente] || 0) + 1;
+  });
+  return { total: (incidencias || []).length, porTipo, porDocente };
+}
+
+function generarExcelBaseDatosSEC2(datos, periodo) {
+  if (!window.XLSX) {
+    throw new Error("No se cargó la librería Excel. Recarga la página e inténtalo otra vez.");
+  }
+
+  const wb = XLSX.utils.book_new();
+  const fechaGeneracion = formatearFechaHoraPDF(new Date());
+
+  const resumen = [
+    ["ESCUELA SECUNDARIA GENERAL No. 2"],
+    ['"SUPREMA JUNTA NACIONAL AMERICANA"'],
+    ["RESPALDO DE BASE DE DATOS"],
+    ["Periodo", periodo.etiqueta],
+    ["Desde", formatearFechaPDF(periodo.inicio)],
+    ["Hasta", formatearFechaPDF(periodo.fin)],
+    ["Fecha de generación", fechaGeneracion],
+    [],
+    ["Total de incidencias", datos.resumen.total],
+    [],
+    ["Resumen por tipo"],
+    ["Tipo de permiso/incidencia", "Total"]
+  ];
+
+  Object.keys(datos.resumen.porTipo).sort().forEach(function(tipo) {
+    resumen.push([tipo, datos.resumen.porTipo[tipo]]);
+  });
+
+  resumen.push([], ["Resumen por docente"], ["Docente", "Total"]);
+  Object.keys(datos.resumen.porDocente).sort().forEach(function(nombre) {
+    resumen.push([nombre, datos.resumen.porDocente[nombre]]);
+  });
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+
+  const incidencias = [["Folio", "Docente", "Turno", "Tipo", "Fecha inicio", "Fecha fin", "Fecha oficial 1", "Fecha uso 1", "Fecha oficial 2", "Fecha uso 2", "Fecha oficial 3", "Fecha uso 3", "Observaciones", "Registrado por", "Fecha registro"]];
+  datos.incidencias.forEach(function(i) {
+    incidencias.push([
+      i.Folio,
+      `${i.Apellidos || ""} ${i.Nombre || ""}`.trim(),
+      TURNOS_TEXTO[i.Turno] || i.Turno || "",
+      i.TipoIncidencia,
+      formatearFechaPDF(i.FechaInicio),
+      formatearFechaPDF(i.FechaFin),
+      formatearFechaPDF(i.FechaOficial1),
+      formatearFechaPDF(i.Uso1Fecha),
+      formatearFechaPDF(i.FechaOficial2),
+      formatearFechaPDF(i.Uso2Fecha),
+      formatearFechaPDF(i.FechaOficial3),
+      formatearFechaPDF(i.Uso3Fecha),
+      i.Observaciones || "",
+      i.RegistradoPor || "",
+      formatearFechaPDF(i.FechaRegistro)
+    ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(incidencias), "Incidencias");
+
+  const detalleOficial = [["Folio", "Docente", "Fecha oficial", "Fecha de uso", "Estado"]];
+  datos.incidencias.filter(function(i) { return esPermisoOficialTexto(i.TipoIncidencia); }).forEach(function(i) {
+    [1, 2, 3].forEach(function(n) {
+      detalleOficial.push([
+        i.Folio,
+        `${i.Apellidos || ""} ${i.Nombre || ""}`.trim(),
+        formatearFechaPDF(i[`FechaOficial${n}`]),
+        i[`Uso${n}Fecha`] ? formatearFechaPDF(i[`Uso${n}Fecha`]) : "",
+        i[`Uso${n}Fecha`] ? "USADO" : "NO USADO"
+      ]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detalleOficial), "Permisos oficiales");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos.usuarios || []), "Usuarios");
+  if ((datos.notificaciones || []).length) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos.notificaciones), "Notificaciones");
+  }
+
+  const nombre = `SEC2_base_${limpiarNombreArchivoSEC2(periodo.etiqueta)}.xlsx`;
+  XLSX.writeFile(wb, nombre);
+}
+
+async function generarPDFBaseDatosSEC2(datos, periodo) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    throw new Error("No se cargó la librería PDF. Recarga la página.");
+  }
+
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+  const logoData = await cargarImagenPDF(SEC2_PDF_LOGO_URL);
+
+  const filas = datos.incidencias.map(function(i, idx) {
+    return [
+      String(idx + 1),
+      `${i.Apellidos || ""} ${i.Nombre || ""}`.trim() || "Sin nombre",
+      i.TipoIncidencia || "Incidencia",
+      textoFechasBasePDFSEC2(i),
+      limpiarTextoPDF(i.Observaciones || i.RegistradoPor || "")
+    ];
+  });
+
+  doc.autoTable({
+    startY: 154,
+    head: [["No.", "DOCENTE", "TIPO", "FECHAS DEL PERMISO", "OBSERVACIONES"]],
+    body: filas.length ? filas : [["", "Sin incidencias", "", "", "No hay registros en el periodo seleccionado."]],
+    theme: "grid",
+    margin: { left: 28, right: 28, top: 154, bottom: 96 },
+    styles: {
+      font: "helvetica",
+      fontSize: 7.2,
+      cellPadding: { top: 5, right: 4, bottom: 5, left: 4 },
+      valign: "middle",
+      textColor: [10, 28, 64],
+      lineColor: [218, 226, 238],
+      lineWidth: 0.5
+    },
+    headStyles: {
+      fillColor: [5, 31, 89],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      halign: "center"
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 26 },
+      1: { cellWidth: 122 },
+      2: { cellWidth: 100 },
+      3: { cellWidth: 210 },
+      4: { cellWidth: 82 }
+    },
+    didDrawPage: function() {
+      dibujarEncabezadoBaseDatosPDFSEC2(doc, logoData, periodo);
+    }
+  });
+
+  let y = doc.lastAutoTable.finalY + 20;
+  y = asegurarEspacioBaseDatosPDFSEC2(doc, y, 130, logoData, periodo);
+  dibujarResumenBaseDatosPDFSEC2(doc, datos, y);
+
+  y += 120;
+  y = asegurarEspacioBaseDatosPDFSEC2(doc, y, 78, logoData, periodo);
+  dibujarFirmaUnicaDireccionPDFSEC2(doc, y);
+
+  agregarPieYPaginacionPDF(doc);
+  await abrirPDFEnTelefono(doc, `SEC2_base_${limpiarNombreArchivoSEC2(periodo.etiqueta)}.pdf`);
+}
+
+function dibujarEncabezadoBaseDatosPDFSEC2(doc, logoData, periodo) {
+  const w = doc.internal.pageSize.getWidth();
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, w, 150, "F");
+
+  if (logoData) {
+    try { doc.addImage(logoData, "PNG", 32, 44, 58, 58); } catch (e) {}
+  }
+
+  const azul = [5, 31, 89];
+  const centroX = 260;
+  const derechaX = w - 92;
+
+  doc.setTextColor(azul[0], azul[1], azul[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.8);
+  doc.text(SEC2_PDF_HEADER_LINEAS[0], centroX, 46, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[1], centroX, 60, { align: "center" });
+  doc.setFontSize(9.4);
+  doc.text(SEC2_PDF_HEADER_LINEAS[2], centroX, 77, { align: "center" });
+  doc.text(SEC2_PDF_HEADER_LINEAS[3], centroX, 92, { align: "center" });
+  doc.setFontSize(8.2);
+  doc.text(SEC2_PDF_HEADER_LINEAS[4], centroX, 108, { align: "center" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.8);
+  doc.text("RESPALDO DE BASE", derechaX, 48, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.1);
+  doc.text("Listado de incidencias", derechaX, 63, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.9);
+  doc.text("Fecha de generación:", derechaX, 81, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text(formatearFechaHoraPDF(new Date()), derechaX, 93, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.9);
+  doc.text("Periodo:", derechaX, 110, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  doc.text(periodo.etiqueta, derechaX, 122, { align: "center" });
+}
+
+function textoFechasBasePDFSEC2(i) {
+  if (esPermisoOficialTexto(i.TipoIncidencia)) {
+    const lineas = [];
+    [1, 2, 3].forEach(function(n) {
+      const oficial = formatearFechaPDF(i[`FechaOficial${n}`]);
+      const uso = i[`Uso${n}Fecha`] ? formatearFechaPDF(i[`Uso${n}Fecha`]) : "pendiente";
+      lineas.push(`Oficial ${n}: ${oficial} | Uso: ${uso}`);
+    });
+    return lineas.join("\n");
+  }
+
+  return `${formatearFechaPDF(i.FechaInicio)} al ${formatearFechaPDF(i.FechaFin)}`;
+}
+
+function dibujarResumenBaseDatosPDFSEC2(doc, datos, y) {
+  const x = 34;
+  const w = doc.internal.pageSize.getWidth() - 68;
+  doc.setDrawColor(205, 215, 228);
+  doc.setLineWidth(0.7);
+  doc.roundedRect(x, y, w, 100, 5, 5);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(5, 31, 89);
+  doc.text("RESUMEN DEL PERIODO", x + 18, y + 24);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.2);
+  doc.text(`Total de incidencias: ${datos.resumen.total}`, x + 18, y + 44);
+
+  const tipos = Object.keys(datos.resumen.porTipo).sort();
+  const texto = tipos.length ? tipos.map(function(t) { return `${t}: ${datos.resumen.porTipo[t]}`; }).join("   ·   ") : "Sin incidencias.";
+  const lineas = doc.splitTextToSize(texto, w - 36);
+  doc.text(lineas.slice(0, 4), x + 18, y + 64);
+}
+
+function dibujarFirmaUnicaDireccionPDFSEC2(doc, y) {
+  const w = doc.internal.pageSize.getWidth();
+  const anchoLinea = 170;
+  const x = (w - anchoLinea) / 2;
+  const lineaY = y + 34;
+
+  doc.setDrawColor(5, 31, 89);
+  doc.setLineWidth(0.8);
+  doc.line(x, lineaY, x + anchoLinea, lineaY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.setTextColor(5, 31, 89);
+  doc.text("Dirección / Subdirección", w / 2, lineaY + 13, { align: "center" });
+}
+
+function asegurarEspacioBaseDatosPDFSEC2(doc, y, altoNecesario, logoData, periodo) {
+  const h = doc.internal.pageSize.getHeight();
+  if (y + altoNecesario < h - 64) return y;
+  doc.addPage();
+  dibujarEncabezadoBaseDatosPDFSEC2(doc, logoData, periodo);
+  return 154;
+}
+
+function limpiarNombreArchivoSEC2(texto) {
+  return limpiarTextoPDF(texto || "respaldo")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_\-]/g, "")
+    .slice(0, 60);
+}
+
 
 function abrirSubmenuDireccionSEC2(tipo) {
   if (currentModule !== "Direccion") return;
@@ -758,22 +1342,31 @@ function abrirConfiguracionDireccionSEC2() {
     return;
   }
 
-  const pass = prompt("Contraseña de configuración:");
-  if (pass === null) return;
+  if (!configuracionAutorizadaSEC2) {
+    const pass = prompt("Contraseña de configuración:");
+    if (pass === null) return;
 
-  if (String(pass).trim() !== SEC2_CONFIG_PASSWORD) {
-    alert("Contraseña de configuración incorrecta.");
-    return;
+    if (String(pass).trim() !== SEC2_CONFIG_PASSWORD) {
+      alert("Contraseña de configuración incorrecta.");
+      return;
+    }
+
+    configuracionAutorizadaSEC2 = true;
   }
 
+  mostrarMenuConfiguracionDireccionSEC2();
+}
+
+function mostrarMenuConfiguracionDireccionSEC2() {
   direccionSubmenuActivoSEC2 = "configuracion";
   const config = MODULES.Direccion;
   const opciones = [
-    { nombre: "Descargar base de datos", descripcion: "Exportar respaldo general en Excel.", color: "blue", icono: "report" },
+    { nombre: "Descargar base de datos", descripcion: "Exportar respaldo general en Excel o PDF.", color: "blue", icono: "report" },
     { nombre: "Limpiar bandeja de mensajes", descripcion: "Eliminar notificaciones después del respaldo.", color: "cyan", icono: "bell" },
     { nombre: "Limpiar base de incidencias", descripcion: "Cerrar ciclo conservando usuarios.", color: "orange", icono: "calendar" },
+    { nombre: "Activar docente", descripcion: "Registrar nuevo usuario de personal.", color: "green", icono: "user" },
     { nombre: "Desactivar docente", descripcion: "Cambiar Activo a No sin borrar historial.", color: "purple", icono: "user" },
-    { nombre: "Exportar eliminados", descripcion: "Descargar auditoría de registros eliminados.", color: "green", icono: "history" }
+    { nombre: "Exportar eliminados", descripcion: "Descargar auditoría de registros eliminados.", color: "gold", icono: "history" }
   ];
 
   renderModuloMenuSEC2("Direccion", config, opciones, {
@@ -788,6 +1381,605 @@ function abrirConfiguracionDireccionSEC2() {
   showScreen("moduleMenu", false);
 }
 
+function regresarConfiguracionDireccionSEC2() {
+  if (currentModule !== "Direccion") currentModule = "Direccion";
+  configuracionAutorizadaSEC2 = true;
+  mostrarMenuConfiguracionDireccionSEC2();
+}
+
+
+
+
+function abrirAdvertenciaLimpiezaSEC2(tipo) {
+  const esMensajes = tipo === "mensajes";
+  document.getElementById("dataTitle").textContent = esMensajes ? "Limpiar bandeja de mensajes" : "Limpiar base de incidencias";
+  document.getElementById("dataSubtitle").textContent = "Acción administrativa de alto riesgo.";
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-orange";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "shield");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card" style="border-left:8px solid var(--orange);">
+      <div style="display:grid;place-items:center;margin-bottom:14px;">
+        <div class="professional-icon solid-orange" data-icon="shield" style="width:84px;height:84px;"></div>
+      </div>
+      <h2 class="section-title">Advertencia</h2>
+      <p class="data-card-text">
+        ${esMensajes
+          ? "Esta acción eliminará la bandeja de notificaciones/mensajes. No elimina usuarios ni incidencias."
+          : "Esta acción limpiará la base de incidencias y permisos oficiales. Conserva usuarios, pero borra los registros operativos del ciclo."}
+      </p>
+      <p class="data-card-text"><strong>Antes de continuar, descarga un respaldo.</strong></p>
+      <button class="secondary-button" onclick="regresarConfiguracionDireccionSEC2()">Cancelar</button>
+      <button class="primary-button" onclick="abrirConfirmacionLimpiezaSEC2('${tipo}')">${esMensajes ? "Limpiar bandeja" : "Limpiar base de incidencias"}</button>
+    </article>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+function abrirConfirmacionLimpiezaSEC2(tipo) {
+  const esMensajes = tipo === "mensajes";
+  document.getElementById("dataTitle").textContent = esMensajes ? "Confirmar limpieza de mensajes" : "Confirmar limpieza de incidencias";
+  document.getElementById("dataSubtitle").textContent = "Confirme la contraseña para ejecutar.";
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-red";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "shield");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card" style="border-left:8px solid var(--red);">
+      <h2 class="section-title">Confirmación final</h2>
+      <p class="data-card-text">Escribe la contraseña de configuración para ejecutar esta acción.</p>
+      <div class="form-row">
+        <div class="form-icon" data-icon="file-plus"></div>
+        <div>
+          <label for="configPasswordConfirmSEC2">Contraseña</label>
+          <input id="configPasswordConfirmSEC2" type="password" placeholder="Contraseña de configuración">
+        </div>
+      </div>
+      <button class="secondary-button" onclick="regresarConfiguracionDireccionSEC2()">Cancelar</button>
+      <button class="primary-button" onclick="ejecutarLimpiezaConfirmadaSEC2('${tipo}')">${esMensajes ? "Eliminar mensajes" : "Eliminar incidencias"}</button>
+      <div id="configActionStatusSEC2" class="status-box"></div>
+    </article>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+async function ejecutarLimpiezaConfirmadaSEC2(tipo) {
+  const pass = document.getElementById("configPasswordConfirmSEC2") ? document.getElementById("configPasswordConfirmSEC2").value : "";
+  const status = document.getElementById("configActionStatusSEC2");
+
+  if (String(pass).trim() !== SEC2_CONFIG_PASSWORD) {
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = "Contraseña incorrecta.";
+    }
+    return;
+  }
+
+  try {
+    if (status) {
+      status.className = "status-box show";
+      status.textContent = "Ejecutando limpieza...";
+    }
+
+    if (tipo === "mensajes") {
+      await eliminarTodoTablaSEC2(["notificaciones", "Notificaciones"], true);
+      mostrarExitoConfiguracionSEC2("Bandeja limpiada", "Se eliminaron los mensajes/notificaciones de la base. Los usuarios e incidencias no fueron modificados.");
+    } else {
+      await eliminarTodoTablaSEC2(["permiso_oficial_fechas", "permisos_oficiales_fechas", "PermisoOficialFechas"], true);
+      await eliminarTodoTablaSEC2(["incidencias", "Incidencias"], false);
+      mostrarExitoConfiguracionSEC2("Base de incidencias limpiada", "Se eliminaron incidencias y fechas oficiales registradas. La plantilla de usuarios se conserva.");
+    }
+  } catch (error) {
+    console.error("Error en limpieza SEC2:", error);
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
+    } else {
+      alert(obtenerMensajeError(error));
+    }
+  }
+}
+
+async function eliminarTodoTablaSEC2(nombres, opcional) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  let ultimoError = null;
+  const filtros = ["id", "ID", "id_notificacion", "IDNotificacion", "id_incidencia", "IDIncidencia", "incidencia_id"];
+
+  for (const tabla of nombres) {
+    for (const col of filtros) {
+      try {
+        const resultado = await cliente.from(tabla).delete().not(col, "is", null);
+        if (!resultado.error) return true;
+        ultimoError = resultado.error;
+      } catch (error) {
+        ultimoError = error;
+      }
+    }
+  }
+
+  if (opcional) return false;
+  throw ultimoError || new Error("No se pudo limpiar la tabla solicitada.");
+}
+
+function mostrarExitoConfiguracionSEC2(titulo, mensaje) {
+  document.getElementById("dataTitle").textContent = titulo;
+  document.getElementById("dataSubtitle").textContent = "Acción completada.";
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-green";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "shield");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card" style="text-align:center;">
+      <div style="width:96px;height:96px;border-radius:50%;background:var(--green);display:grid;place-items:center;color:white;font-size:54px;font-weight:900;margin:0 auto 18px;">✓</div>
+      <h2 class="section-title" style="text-align:center;">${escapeHTML(titulo)}</h2>
+      <p class="data-card-text">${escapeHTML(mensaje)}</p>
+      <button class="primary-button" onclick="regresarConfiguracionDireccionSEC2()">Regresar a configuración</button>
+    </article>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+function abrirActivarDocenteSEC2() {
+  document.getElementById("dataTitle").textContent = "Activar docente";
+  document.getElementById("dataSubtitle").textContent = "Registro de nuevo usuario.";
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-green";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "user");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card">
+      <h2 class="section-title">Nuevo registro</h2>
+      <div class="form-row">
+        <div class="form-icon" data-icon="user"></div>
+        <div>
+          <label for="altaNombreSEC2">Nombre(s)</label>
+          <input id="altaNombreSEC2" type="text" placeholder="Nombre o nombres">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-icon" data-icon="user"></div>
+        <div>
+          <label for="altaPaternoSEC2">Apellido paterno</label>
+          <input id="altaPaternoSEC2" type="text" placeholder="Apellido paterno">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-icon" data-icon="user"></div>
+        <div>
+          <label for="altaMaternoSEC2">Apellido materno</label>
+          <input id="altaMaternoSEC2" type="text" placeholder="Apellido materno">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-icon" data-icon="shield"></div>
+        <div>
+          <label for="altaRolSEC2">Rol</label>
+          <select id="altaRolSEC2">
+            <option value="Docente">Docente</option>
+            <option value="Prefectura">Prefectura</option>
+            <option value="Correspondencia">Correspondencia</option>
+            <option value="Dirección">Dirección</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-icon" data-icon="calendar"></div>
+        <div>
+          <label for="altaTurnoSEC2">Turno</label>
+          <select id="altaTurnoSEC2">
+            <option value="M">Matutino</option>
+            <option value="V">Vespertino</option>
+            <option value="A">Ambos</option>
+          </select>
+        </div>
+      </div>
+      <button class="secondary-button" onclick="regresarConfiguracionDireccionSEC2()">Cancelar</button>
+      <button class="primary-button" onclick="guardarNuevoUsuarioSEC2()">Guardar</button>
+      <div id="altaUsuarioStatusSEC2" class="status-box"></div>
+    </article>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+async function guardarNuevoUsuarioSEC2() {
+  const nombre = valorInput("altaNombreSEC2").trim();
+  const paterno = valorInput("altaPaternoSEC2").trim();
+  const materno = valorInput("altaMaternoSEC2").trim();
+  const rol = document.getElementById("altaRolSEC2").value;
+  const turno = document.getElementById("altaTurnoSEC2").value;
+  const status = document.getElementById("altaUsuarioStatusSEC2");
+
+  if (!nombre || !paterno || !materno) {
+    status.className = "status-box show error";
+    status.textContent = "Completa nombre, apellido paterno y apellido materno.";
+    return;
+  }
+
+  const idAcceso = generarIDAccesoSEC2(nombre, paterno, materno);
+  const password = generarPasswordSEC2(nombre, paterno, materno);
+  const apellidos = `${paterno} ${materno}`.trim();
+
+  try {
+    status.className = "status-box show";
+    status.textContent = "Guardando nuevo usuario...";
+
+    const insertado = await insertarUsuarioSEC2({ nombre, apellidos, rol, turno, idAcceso, password });
+    ultimoUsuarioCreadoConfigSEC2 = { idAcceso, id: insertado.id || insertado.ID || insertado.IDUsuario || "", nombre, apellidos, rol, turno, password };
+
+    document.getElementById("dataTitle").textContent = "Alta registrada";
+    document.getElementById("dataSubtitle").textContent = "Resumen del nuevo usuario.";
+    document.getElementById("dataBrandIcon").className = "brand-icon solid-green";
+    document.getElementById("dataBrandIcon").setAttribute("data-icon", "user");
+    document.getElementById("dataStats").innerHTML = "";
+    document.getElementById("dataList").innerHTML = `
+      <article class="data-card">
+        <h2 class="section-title">Resumen de alta</h2>
+        <p class="data-card-text"><strong>Nombre:</strong> ${escapeHTML(nombre)} ${escapeHTML(apellidos)}</p>
+        <p class="data-card-text"><strong>Rol:</strong> ${escapeHTML(rol)}</p>
+        <p class="data-card-text"><strong>Turno:</strong> ${escapeHTML(TURNOS_TEXTO[turno] || turno)}</p>
+        <p class="data-card-text"><strong>ID de acceso:</strong> ${escapeHTML(idAcceso)}</p>
+        <p class="data-card-text"><strong>Contraseña:</strong> ${escapeHTML(password)}</p>
+        <button class="primary-button" onclick="regresarConfiguracionDireccionSEC2()">Menú configuración</button>
+        <button class="secondary-button" onclick="cancelarAltaUsuarioSEC2()">Cancelar alta y borrar registro</button>
+        <div id="altaCancelStatusSEC2" class="status-box"></div>
+      </article>
+    `;
+    inicializarIconos();
+  } catch (error) {
+    console.error("Error creando usuario:", error);
+    status.className = "status-box show error";
+    status.textContent = obtenerMensajeError(error);
+  }
+}
+
+function generarIDAccesoSEC2(nombre, paterno, materno) {
+  const limpiar = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z]/g, "").toUpperCase();
+  return `${limpiar(nombre).slice(0,2)}${limpiar(paterno).slice(0,2)}${limpiar(materno).slice(0,2)}` || `USR${Date.now()}`;
+}
+
+function generarPasswordSEC2(nombre, paterno, materno) {
+  const limpiar = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z]/g, "").toUpperCase();
+  return `${limpiar(nombre).slice(0,1)}${limpiar(paterno).slice(0,1)}${limpiar(materno).slice(0,1)}1234`;
+}
+
+async function insertarUsuarioSEC2(usuario) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  const payloads = [
+    {
+      Nombre: usuario.nombre,
+      Apellidos: usuario.apellidos,
+      Correo: "",
+      Rol: usuario.rol,
+      Turno: usuario.turno,
+      Activo: "Sí",
+      IDAcceso: usuario.idAcceso,
+      Password: usuario.password
+    },
+    {
+      nombre: usuario.nombre,
+      apellidos: usuario.apellidos,
+      correo: "",
+      rol: usuario.rol,
+      turno: usuario.turno,
+      activo: true,
+      id_acceso: usuario.idAcceso,
+      password: usuario.password
+    },
+    {
+      nombre: usuario.nombre,
+      apellidos: usuario.apellidos,
+      rol: usuario.rol,
+      turno: usuario.turno,
+      activo: "Sí",
+      idacceso: usuario.idAcceso,
+      contrasena: usuario.password
+    }
+  ];
+
+  let ultimoError = null;
+  for (const tabla of ["usuarios", "Usuarios"]) {
+    for (const payload of payloads) {
+      try {
+        const r = await cliente.from(tabla).insert([payload]).select().single();
+        if (!r.error) return r.data || payload;
+        ultimoError = r.error;
+      } catch (error) {
+        ultimoError = error;
+      }
+    }
+  }
+  throw ultimoError || new Error("No se pudo guardar el usuario.");
+}
+
+async function cancelarAltaUsuarioSEC2() {
+  if (!ultimoUsuarioCreadoConfigSEC2) return regresarConfiguracionDireccionSEC2();
+  const status = document.getElementById("altaCancelStatusSEC2");
+  try {
+    if (status) {
+      status.className = "status-box show";
+      status.textContent = "Eliminando alta recién creada...";
+    }
+    await eliminarUsuarioPorIDAccesoSEC2(ultimoUsuarioCreadoConfigSEC2);
+    ultimoUsuarioCreadoConfigSEC2 = null;
+    mostrarExitoConfiguracionSEC2("Alta cancelada", "El registro recién creado fue eliminado.");
+  } catch (error) {
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
+    }
+  }
+}
+
+async function eliminarUsuarioPorIDAccesoSEC2(usuario) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  const filtros = [
+    ["IDAcceso", usuario.idAcceso],
+    ["id_acceso", usuario.idAcceso],
+    ["idacceso", usuario.idAcceso],
+    ["id", usuario.id],
+    ["ID", usuario.id]
+  ];
+
+  let ultimoError = null;
+  for (const tabla of ["usuarios", "Usuarios"]) {
+    for (const f of filtros) {
+      if (!f[1]) continue;
+      try {
+        const r = await cliente.from(tabla).delete().eq(f[0], f[1]);
+        if (!r.error) return true;
+        ultimoError = r.error;
+      } catch (error) {
+        ultimoError = error;
+      }
+    }
+  }
+  throw ultimoError || new Error("No se pudo cancelar el alta.");
+}
+
+async function abrirDesactivarDocenteSEC2() {
+  document.getElementById("dataTitle").textContent = "Desactivar docente";
+  document.getElementById("dataSubtitle").textContent = "Seleccione el registro a desactivar.";
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-purple";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "user");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = crearTarjetaSimple("Cargando personal...", "Consultando usuarios activos.");
+  showScreen("dataScreen");
+  inicializarIconos();
+
+  try {
+    const usuarios = await obtenerUsuariosConfigSEC2();
+    const opciones = usuarios.map(function(u) {
+      const id = u.IDAcceso || u.id_acceso || u.idacceso || u.ID || u.id || "";
+      const nombre = `${u.Apellidos || u.apellidos || ""} ${u.Nombre || u.nombre || ""}`.trim();
+      const rol = u.Rol || u.rol || "";
+      const turno = TURNOS_TEXTO[u.Turno || u.turno] || u.Turno || u.turno || "";
+      return `<option value="${escapeHTML(String(id))}">${escapeHTML(nombre)}${rol ? " (" + escapeHTML(rol) + ")" : ""}${turno ? " · " + escapeHTML(turno) : ""}</option>`;
+    }).join("");
+
+    document.getElementById("dataList").innerHTML = `
+      <article class="data-card">
+        <h2 class="section-title">Personal activo</h2>
+        <div class="form-row">
+          <div class="form-icon" data-icon="user"></div>
+          <div>
+            <label for="desactivarUsuarioSelectSEC2">Docente / personal</label>
+            <select id="desactivarUsuarioSelectSEC2">${opciones || '<option value="">Sin usuarios disponibles</option>'}</select>
+          </div>
+        </div>
+        <button class="secondary-button" onclick="regresarConfiguracionDireccionSEC2()">Cancelar</button>
+        <button class="primary-button" onclick="abrirConfirmarDesactivarDocenteSEC2()">Desactivar</button>
+      </article>
+    `;
+    window.usuariosConfigCacheSEC2 = usuarios;
+    inicializarIconos();
+  } catch (error) {
+    document.getElementById("dataList").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
+  }
+}
+
+async function obtenerUsuariosConfigSEC2() {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+  const usuarios = await seleccionarTablaSupabaseSEC2(cliente, ["usuarios", "Usuarios"]);
+  return (usuarios || []).filter(function(u) {
+    const activo = String(u.Activo ?? u.activo ?? "Sí").toLowerCase();
+    return activo !== "no" && activo !== "false" && activo !== "0";
+  }).sort(function(a, b) {
+    const na = `${a.Apellidos || a.apellidos || ""} ${a.Nombre || a.nombre || ""}`;
+    const nb = `${b.Apellidos || b.apellidos || ""} ${b.Nombre || b.nombre || ""}`;
+    return na.localeCompare(nb, "es");
+  });
+}
+
+function abrirConfirmarDesactivarDocenteSEC2() {
+  const select = document.getElementById("desactivarUsuarioSelectSEC2");
+  const id = select ? select.value : "";
+  if (!id) {
+    alert("Selecciona un registro.");
+    return;
+  }
+  const usuario = (window.usuariosConfigCacheSEC2 || []).find(function(u) {
+    const uid = u.IDAcceso || u.id_acceso || u.idacceso || u.ID || u.id || "";
+    return String(uid) === String(id);
+  }) || { IDAcceso: id };
+
+  const nombre = `${usuario.Apellidos || usuario.apellidos || ""} ${usuario.Nombre || usuario.nombre || ""}`.trim() || id;
+
+  document.getElementById("dataTitle").textContent = "Confirmar desactivación";
+  document.getElementById("dataSubtitle").textContent = "Advertencia administrativa.";
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-orange";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "shield");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card" style="border-left:8px solid var(--orange);">
+      <h2 class="section-title">Advertencia</h2>
+      <p class="data-card-text">Se desactivará el siguiente registro:</p>
+      <p class="data-card-text"><strong>${escapeHTML(nombre)}</strong></p>
+      <p class="data-card-text">No se borrará su historial. La columna Activo pasará a <strong>No</strong>.</p>
+      <button class="secondary-button" onclick="abrirDesactivarDocenteSEC2()">Cancelar</button>
+      <button class="primary-button" onclick="ejecutarDesactivarDocenteSEC2('${escapeHTML(String(id))}')">Desactivar</button>
+      <div id="desactivarStatusSEC2" class="status-box"></div>
+    </article>
+  `;
+  inicializarIconos();
+}
+
+async function ejecutarDesactivarDocenteSEC2(id) {
+  const status = document.getElementById("desactivarStatusSEC2");
+  try {
+    if (status) {
+      status.className = "status-box show";
+      status.textContent = "Desactivando registro...";
+    }
+    await actualizarActivoUsuarioSEC2(id, "No");
+    mostrarExitoConfiguracionSEC2("Registro desactivado", "El usuario fue desactivado. Su historial se conserva para respaldos y consultas.");
+  } catch (error) {
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
+    }
+  }
+}
+
+async function actualizarActivoUsuarioSEC2(id, valor) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  const intentos = [
+    { filtro: "IDAcceso", datos: { Activo: valor } },
+    { filtro: "id_acceso", datos: { activo: valor === "No" ? false : true } },
+    { filtro: "idacceso", datos: { activo: valor } },
+    { filtro: "id", datos: { activo: valor === "No" ? false : true } },
+    { filtro: "ID", datos: { Activo: valor } }
+  ];
+
+  let ultimoError = null;
+  for (const tabla of ["usuarios", "Usuarios"]) {
+    for (const intento of intentos) {
+      try {
+        const r = await cliente.from(tabla).update(intento.datos).eq(intento.filtro, id);
+        if (!r.error) return true;
+        ultimoError = r.error;
+      } catch (error) {
+        ultimoError = error;
+      }
+    }
+  }
+  throw ultimoError || new Error("No se pudo desactivar el usuario.");
+}
+
+function abrirExportarEliminadosSEC2() {
+  document.getElementById("dataTitle").textContent = "Exportar eliminados";
+  document.getElementById("dataSubtitle").textContent = "Auditoría de registros eliminados.";
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-gold";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "history");
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = `
+    <article class="data-card">
+      <h2 class="section-title">Exportar tabla de eliminados</h2>
+      <p class="data-card-text">Descarga la auditoría de incidencias eliminadas si existe la tabla correspondiente.</p>
+      <button class="primary-button" onclick="exportarEliminadosSEC2('excel')">Exportar en Excel</button>
+      <button class="secondary-button" onclick="exportarEliminadosSEC2('pdf')">Exportar en PDF</button>
+      <button class="secondary-button" onclick="regresarConfiguracionDireccionSEC2()">Cancelar</button>
+      <div id="eliminadosStatusSEC2" class="status-box"></div>
+    </article>
+  `;
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+async function exportarEliminadosSEC2(formato) {
+  const status = document.getElementById("eliminadosStatusSEC2");
+  try {
+    if (status) {
+      status.className = "status-box show";
+      status.textContent = "Preparando reporte de eliminados...";
+    }
+    const datos = await obtenerEliminadosSEC2();
+    if (formato === "excel") {
+      generarExcelEliminadosSEC2(datos);
+      mostrarExitoConfiguracionSEC2("Excel de eliminados generado", "Se generó el archivo de auditoría de registros eliminados.");
+    } else {
+      await generarPDFEliminadosSEC2(datos);
+      mostrarExitoConfiguracionSEC2("PDF de eliminados generado", "Se generó el reporte de auditoría de registros eliminados.");
+    }
+  } catch (error) {
+    if (status) {
+      status.className = "status-box show error";
+      status.textContent = obtenerMensajeError(error);
+    }
+  }
+}
+
+async function obtenerEliminadosSEC2() {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase.");
+
+  return await seleccionarTablaSupabaseSEC2(cliente, ["incidencias_eliminadas", "eliminados", "auditoria_eliminados", "Eliminados"], true);
+}
+
+function generarExcelEliminadosSEC2(datos) {
+  if (!window.XLSX) throw new Error("No se cargó la librería Excel.");
+  const wb = XLSX.utils.book_new();
+  const encabezado = [
+    ["ESCUELA SECUNDARIA GENERAL No. 2"],
+    ["REPORTE DE ELIMINADOS"],
+    ["Fecha de generación", formatearFechaHoraPDF(new Date())],
+    []
+  ];
+  const filas = (datos && datos.length) ? datos : [{ mensaje: "Sin registros eliminados" }];
+  const ws = XLSX.utils.aoa_to_sheet(encabezado);
+  XLSX.utils.sheet_add_json(ws, filas, { origin: -1 });
+  XLSX.utils.book_append_sheet(wb, ws, "Eliminados");
+  XLSX.writeFile(wb, "SEC2_eliminados.xlsx");
+}
+
+async function generarPDFEliminadosSEC2(datos) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("No se cargó la librería PDF.");
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+  const logoData = await cargarImagenPDF(SEC2_PDF_LOGO_URL);
+  const filas = (datos || []).map(function(r, idx) {
+    return [
+      String(idx + 1),
+      limpiarTextoPDF(r.Folio || r.folio || r.IDIncidencia || r.id_incidencia || r.id || ""),
+      limpiarTextoPDF(r.Nombre || r.nombre || r.docente || r.Docente || ""),
+      limpiarTextoPDF(r.TipoIncidencia || r.tipo || r.tipo_incidencia || ""),
+      formatearFechaPDF(r.FechaEliminacion || r.fecha_eliminacion || r.deleted_at || r.created_at || ""),
+      limpiarTextoPDF(r.EliminadoPor || r.eliminado_por || r.usuario || "")
+    ];
+  });
+
+  doc.autoTable({
+    startY: 154,
+    head: [["No.", "FOLIO", "DOCENTE", "TIPO", "FECHA", "ELIMINADO POR"]],
+    body: filas.length ? filas : [["", "Sin registros", "", "", "", ""]],
+    theme: "grid",
+    margin: { left: 28, right: 28, top: 154, bottom: 96 },
+    styles: { font: "helvetica", fontSize: 7.2, cellPadding: 5, textColor: [10, 28, 64], lineColor: [218, 226, 238], lineWidth: 0.5 },
+    headStyles: { fillColor: [5, 31, 89], textColor: [255,255,255], fontStyle: "bold", halign: "center" },
+    didDrawPage: function() {
+      dibujarEncabezadoBaseDatosPDFSEC2(doc, logoData, { etiqueta: "Registros eliminados" });
+    }
+  });
+
+  let y = doc.lastAutoTable.finalY + 24;
+  y = asegurarEspacioBaseDatosPDFSEC2(doc, y, 78, logoData, { etiqueta: "Registros eliminados" });
+  dibujarFirmaUnicaDireccionPDFSEC2(doc, y);
+  agregarPieYPaginacionPDF(doc);
+  await abrirPDFEnTelefono(doc, "SEC2_eliminados.pdf");
+}
 
 
 function abrirMiPerfil() {
@@ -4257,3 +5449,4 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
+
