@@ -1,4 +1,4 @@
-/* SEC2_APP_V48_PDF_FIRMAS_COMPROBANTE_NOTIF_FIX_20260711 */
+/* SEC2_APP_V50_CONFIG_PASSWORD_GALA_20260712 */
 /* Base: V35 + encabezado institucional azul, Cargo visible y fechas sin encimarse */
 /* Base: V31 + PDF sin IDAcceso visible + gráfica mensual fija 9 meses centrada y eje adaptativo */
 /* Base: V30 + encabezado PDF SEP/Estado + C.T. sin lema */
@@ -16,6 +16,9 @@ const TEST_USERS = {
   "Prefectura": "P001",
   "Docente": "M001"
 };
+
+const SEC2_CONFIG_PASSWORD = "$Gala33C1ex";
+let direccionSubmenuActivoSEC2 = "";
 
 const TURNOS_TEXTO = {
   "A": "Ambos",
@@ -65,12 +68,10 @@ const MODULES = {
     acceso: "Permisos completos de administración y gestión.",
     opciones: [
       { nombre: "Mi perfil", descripcion: "Consulta personal e historial propio.", color: "gold", icono: "user" },
-      { nombre: "Consulta de fechas", descripcion: "Análisis por fecha o rango.", color: "orange", icono: "calendar" },
-      { nombre: "Otorgar incidencia", descripcion: "Crear nueva incidencia.", color: "purple", icono: "file-plus" },
-      { nombre: "Historial general", descripcion: "Consulta por docente.", color: "green", icono: "history" },
-      { nombre: "Reporte del día", descripcion: "Incidencias activas del día actual.", color: "blue-light", icono: "report" },
-      { nombre: "Reporte semanal", descripcion: "Vista automática semanal.", color: "blue", icono: "calendar" },
-      { nombre: "Notificaciones", descripcion: "Centro de mensajes.", color: "cyan", icono: "bell" }
+      { nombre: "Permisos", descripcion: "Consulta, registro e historial de permisos.", color: "purple", icono: "calendar" },
+      { nombre: "Reportes", descripcion: "Reporte diario, semanal e historial general.", color: "blue", icono: "report" },
+      { nombre: "Notificaciones", descripcion: "Centro de mensajes.", color: "cyan", icono: "bell" },
+      { nombre: "Configuración", descripcion: "Herramientas administrativas protegidas.", color: "green", icono: "shield" }
     ]
   },
   "Correspondencia": {
@@ -456,6 +457,12 @@ function prepararScrollPantallaActivaApp(el) {
 }
 
 function goBack() {
+  if (currentScreen === "moduleMenu" && currentModule === "Direccion" && direccionSubmenuActivoSEC2) {
+    direccionSubmenuActivoSEC2 = "";
+    openModule("Direccion");
+    return;
+  }
+
   // SEC2_FIX_EDITAR_USO_REGRESA_A_DOCENTE_V16_20260710
   // Al editar fechas de uso de un permiso oficial, Atrás debe volver al resumen del docente,
   // no al detalle técnico del permiso.
@@ -629,24 +636,29 @@ function openModule(moduleName) {
 
   currentModule = moduleName;
   profileMode = false;
+  direccionSubmenuActivoSEC2 = "";
   sessionStorage.setItem("currentActiveModule", moduleName);
 
-  const config = MODULES[moduleName];
-  const avatar = document.getElementById("moduleAvatar");
-  avatar.className = `module-avatar bg-${config.avatarColor} color-${config.avatarColor}`;
-  avatar.setAttribute("data-icon", config.avatar);
+  renderModuloMenuSEC2(moduleName, MODULES[moduleName], MODULES[moduleName].opciones);
+  showScreen("moduleMenu");
+}
 
-  document.getElementById("moduleTitle").textContent = config.titulo;
-  document.getElementById("moduleTitle").className = `module-hero-title color-${config.avatarColor}`;
-  document.getElementById("moduleSubtitle").textContent = config.subtitulo;
-  document.getElementById("moduleImportantText").textContent = config.importante;
+function renderModuloMenuSEC2(moduleName, config, opciones, ajustes = {}) {
+  const avatar = document.getElementById("moduleAvatar");
+  avatar.className = `module-avatar bg-${ajustes.avatarColor || config.avatarColor} color-${ajustes.avatarColor || config.avatarColor}`;
+  avatar.setAttribute("data-icon", ajustes.avatar || config.avatar);
+
+  document.getElementById("moduleTitle").textContent = ajustes.titulo || config.titulo;
+  document.getElementById("moduleTitle").className = `module-hero-title color-${ajustes.avatarColor || config.avatarColor}`;
+  document.getElementById("moduleSubtitle").textContent = ajustes.subtitulo || config.subtitulo;
+  document.getElementById("moduleImportantText").textContent = ajustes.importante || config.importante;
   document.getElementById("accessTitle").textContent = "Acceso: " + moduleName;
-  document.getElementById("accessText").textContent = config.acceso;
+  document.getElementById("accessText").textContent = ajustes.acceso || config.acceso;
 
   const container = document.getElementById("moduleButtons");
   container.innerHTML = "";
 
-  config.opciones.forEach(option => {
+  (opciones || []).forEach(option => {
     const button = document.createElement("button");
     button.className = "professional-card";
     button.onclick = () => openOption(option.nombre);
@@ -661,17 +673,122 @@ function openModule(moduleName) {
     container.appendChild(button);
   });
 
-  showScreen("moduleMenu");
+  inicializarIconos();
 }
+
 function openOption(optionName) {
   if (optionName === "Mi perfil" || optionName === "Mi Perfil") return abrirMiPerfil();
+  if (optionName === "Permisos") return abrirSubmenuDireccionSEC2("permisos");
+  if (optionName === "Reportes") return abrirSubmenuDireccionSEC2("reportes");
+  if (optionName === "Configuración") return abrirConfiguracionDireccionSEC2();
   if (optionName === "Otorgar incidencia") return openTipoIncidencia();
   if (optionName === "Reporte del día") return cargarReporteDia();
   if (optionName === "Reporte semanal") return cargarReporteSemanal();
   if (optionName === "Consulta de fechas") return abrirConsultaFechas();
   if (optionName === "Historial" || optionName === "Historial general") return abrirSelectorHistorial();
   if (optionName === "Notificaciones") return abrirNotificaciones();
+  if (
+    optionName === "Descargar base de datos" ||
+    optionName === "Limpiar bandeja de mensajes" ||
+    optionName === "Limpiar base de incidencias" ||
+    optionName === "Desactivar docente" ||
+    optionName === "Exportar eliminados"
+  ) return abrirPantallaConfiguracionPendienteSEC2(optionName);
 }
+
+function abrirPantallaConfiguracionPendienteSEC2(nombreAccion) {
+  document.getElementById("dataTitle").textContent = nombreAccion;
+  document.getElementById("dataSubtitle").textContent = "Configuración administrativa protegida";
+  document.getElementById("dataBrandIcon").className = "brand-icon solid-green";
+  document.getElementById("dataBrandIcon").setAttribute("data-icon", "shield");
+  document.getElementById("dataAccessName").textContent = currentModule;
+  document.getElementById("dataStats").innerHTML = "";
+  document.getElementById("dataList").innerHTML = crearTarjetaSimple(
+    "Pendiente de activación segura",
+    "La pantalla ya queda organizada dentro de Configuración. La acción se conectará después con confirmación, respaldo y protección contra borrado accidental."
+  );
+  showScreen("dataScreen");
+  inicializarIconos();
+}
+
+function abrirSubmenuDireccionSEC2(tipo) {
+  if (currentModule !== "Direccion") return;
+
+  const config = MODULES.Direccion;
+  direccionSubmenuActivoSEC2 = tipo;
+
+  const opcionesPermisos = [
+    { nombre: "Consulta de fechas", descripcion: "Análisis por fecha o rango.", color: "orange", icono: "calendar" },
+    { nombre: "Otorgar incidencia", descripcion: "Crear nueva incidencia.", color: "purple", icono: "edit" },
+    { nombre: "Historial general", descripcion: "Consulta por docente.", color: "green", icono: "history" }
+  ];
+
+  const opcionesReportes = [
+    { nombre: "Reporte del día", descripcion: "Incidencias activas del día actual.", color: "blue-light", icono: "report" },
+    { nombre: "Reporte semanal", descripcion: "Vista automática semanal.", color: "blue", icono: "calendar" },
+    { nombre: "Historial general", descripcion: "Consulta por docente.", color: "green", icono: "history" }
+  ];
+
+  if (tipo === "permisos") {
+    renderModuloMenuSEC2("Direccion", config, opcionesPermisos, {
+      titulo: "Permisos",
+      subtitulo: "Consulta, registro e historial",
+      avatar: "calendar",
+      avatarColor: "purple",
+      importante: "Historial general se incluye aquí para consultar rápidamente los permisos de cada docente.",
+      acceso: "Permisos administrativos de Dirección."
+    });
+  } else {
+    renderModuloMenuSEC2("Direccion", config, opcionesReportes, {
+      titulo: "Reportes",
+      subtitulo: "Reportes e historial general",
+      avatar: "report",
+      avatarColor: "blue",
+      importante: "Historial general también se incluye en reportes porque funciona como consulta administrativa completa.",
+      acceso: "Reportes completos de Dirección."
+    });
+  }
+
+  showScreen("moduleMenu", false);
+}
+
+function abrirConfiguracionDireccionSEC2() {
+  if (currentModule !== "Direccion") {
+    alert("Configuración solo está disponible para Dirección.");
+    return;
+  }
+
+  const pass = prompt("Contraseña de configuración:");
+  if (pass === null) return;
+
+  if (String(pass).trim() !== SEC2_CONFIG_PASSWORD) {
+    alert("Contraseña de configuración incorrecta.");
+    return;
+  }
+
+  direccionSubmenuActivoSEC2 = "configuracion";
+  const config = MODULES.Direccion;
+  const opciones = [
+    { nombre: "Descargar base de datos", descripcion: "Exportar respaldo general en Excel.", color: "blue", icono: "report" },
+    { nombre: "Limpiar bandeja de mensajes", descripcion: "Eliminar notificaciones después del respaldo.", color: "cyan", icono: "bell" },
+    { nombre: "Limpiar base de incidencias", descripcion: "Cerrar ciclo conservando usuarios.", color: "orange", icono: "calendar" },
+    { nombre: "Desactivar docente", descripcion: "Cambiar Activo a No sin borrar historial.", color: "purple", icono: "user" },
+    { nombre: "Exportar eliminados", descripcion: "Descargar auditoría de registros eliminados.", color: "green", icono: "history" }
+  ];
+
+  renderModuloMenuSEC2("Direccion", config, opciones, {
+    titulo: "Configuración",
+    subtitulo: "Administración avanzada",
+    avatar: "shield",
+    avatarColor: "green",
+    importante: "Estas opciones son administrativas. Antes de limpiar información debe existir respaldo descargado.",
+    acceso: "Configuración protegida por contraseña extra."
+  });
+
+  showScreen("moduleMenu", false);
+}
+
+
 
 function abrirMiPerfil() {
   profileMode = true;
@@ -1123,12 +1240,8 @@ function renderDetalleIncidencia(respuesta) {
 
   html += `<button class="primary-button" onclick="generarComprobantePDFIncidenciaActual()">Generar PDF</button>`;
 
-  if (andPuedeEditar && i.TipoIncidencia && esPermisoOfTexto(i.TipoIncidencia)) {
-    html += `<button class="primary-button" onclick="abrirEdicionUsoPermiso()">Editar incidencia</button>`;
-  }
-
-  if (andPuedeEliminar) {
-    html += `<button class="danger-button" onclick="eliminarIncidenciaActual()">Eliminar incidencia</button>`;
+  if (andPuedeEditar) {
+    html += `<button class="primary-button" onclick="abrirEdicionIncidencia()">Editar permiso</button>`;
   }
 
   html += `
@@ -1216,15 +1329,29 @@ function detalleFecha(label, fecha, estado) {
 }
 
 function abrirEdicionUsoPermiso() {
-  document.getElementById("editUseContent").innerHTML = crearTarjetaSimple("Cargando edición...", "Consultando permiso oficial.");
+  abrirEdicionIncidencia();
+}
+
+function abrirEdicionIncidencia() {
+  document.getElementById("editUseContent").innerHTML = crearTarjetaSimple("Cargando edición...", "Consultando incidencia.");
   showScreen("editUseScreen");
-  
-  API.obtenerDetalleIncidencia(selectedIncidentID, respuesta => renderEditarUso(respuesta.incidencia), error => {
+
+  API.obtenerDetalleIncidencia(selectedIncidentID, function(respuesta) {
+    const incidencia = respuesta.incidencia || {};
+    if (esPermisoOficialTexto(incidencia.TipoIncidencia)) {
+      renderEditarUso(respuesta.incidencia);
+    } else {
+      renderEditarIncidenciaNormal(respuesta.incidencia);
+    }
+  }, function(error) {
     document.getElementById("editUseContent").innerHTML = crearTarjetaSimple("Error", obtenerMensajeError(error));
   });
 }
 
 function renderEditarUso(i) {
+  actualizarEncabezadoEdicionIncidenciaSEC2("Permiso oficial", "Editar fechas de uso pendientes", "purple", "permiso-oficial");
+
+  const puedeEliminar = currentModule === "Direccion";
   const html = `
     <section class="data-card">
       <h2 class="section-title">Fechas oficiales autorizadas</h2>
@@ -1247,7 +1374,9 @@ function renderEditarUso(i) {
         <p class="info-text">Las fechas ya utilizadas no pueden modificarse.</p>
       </div>
     </section>
+    <button class="secondary-button" onclick="cancelarEdicionIncidencia()">Cancelar</button>
     <button class="primary-button" onclick="guardarEdicionUso()">Guardar cambios</button>
+    ${puedeEliminar ? `<button class="danger-button" onclick="eliminarIncidenciaActual()">Eliminar incidencia</button>` : ""}
     <div id="editUseStatus" class="status-box"></div>
     <section class="access-card">
       <div class="access-icon" data-icon="shield"></div>
@@ -1258,8 +1387,101 @@ function renderEditarUso(i) {
       <button class="logout-fake" onclick="cerrarSesion()">Cerrar<br>sesión</button>
     </section>
   `;
-  document.getElementById("editUseContent").innerHTML = html; inicializarIconos();
+  document.getElementById("editUseContent").innerHTML = html;
+  inicializarIconos();
 }
+
+function renderEditarIncidenciaNormal(i) {
+  actualizarEncabezadoEdicionIncidenciaSEC2("Editar permiso", "Modificar periodo y observaciones", "purple", "edit");
+
+  const fechaInicio = formatearFechaInputSEC2(i.FechaInicio);
+  const fechaFin = formatearFechaInputSEC2(i.FechaFin);
+  const licencia = escapeHTML(i.LicenciaMedica || "");
+  const observaciones = escapeHTML(i.Observaciones || "");
+
+  const html = `
+    <section class="data-card">
+      <h2 class="section-title">Periodo autorizado</h2>
+      <p class="section-subtitle">Ajusta las fechas definitivas del permiso/incidencia.</p>
+      <div class="official-row">
+        <div class="official-label">Fecha inicio</div>
+        <input id="editFechaInicio" type="date" value="${fechaInicio}">
+      </div>
+      <div class="official-row">
+        <div class="official-label">Fecha fin</div>
+        <input id="editFechaFin" type="date" value="${fechaFin}">
+      </div>
+    </section>
+
+    <section class="data-card">
+      <h2 class="section-title">Datos complementarios</h2>
+      <div class="official-row">
+        <div class="official-label">Licencia médica</div>
+        <input id="editLicenciaMedica" type="text" value="${licencia}" placeholder="Opcional">
+      </div>
+      <div class="official-row">
+        <div class="official-label">Observaciones</div>
+        <textarea id="editObservaciones" style="width:100%;min-height:110px;border-radius:18px;border:1px solid #d1d5db;padding:12px;font-size:15px;box-sizing:border-box;">${observaciones}</textarea>
+      </div>
+    </section>
+
+    <button class="secondary-button" onclick="cancelarEdicionIncidencia()">Cancelar</button>
+    <button class="primary-button" onclick="guardarEdicionIncidenciaNormal()">Guardar cambios</button>
+    <button class="danger-button" onclick="eliminarIncidenciaActual()">Eliminar incidencia</button>
+    <div id="editUseStatus" class="status-box"></div>
+    <section class="access-card">
+      <div class="access-icon" data-icon="shield"></div>
+      <div>
+        <h2 class="access-title">Acceso: Dirección</h2>
+        <p class="access-text">Edición de incidencia registrada.</p>
+      </div>
+      <button class="logout-fake" onclick="cerrarSesion()">Cerrar<br>sesión</button>
+    </section>
+  `;
+
+  document.getElementById("editUseContent").innerHTML = html;
+  inicializarIconos();
+}
+
+function actualizarEncabezadoEdicionIncidenciaSEC2(titulo, subtitulo, color, icono) {
+  const title = document.getElementById("editUseTitle");
+  const subtitle = document.getElementById("editUseSubtitle");
+  const icon = document.getElementById("editUseIcon");
+
+  if (title) {
+    title.textContent = titulo;
+    title.className = `page-title color-${color}`;
+  }
+
+  if (subtitle) subtitle.textContent = subtitulo;
+
+  if (icon) {
+    icon.className = `brand-icon solid-${color}`;
+    icon.setAttribute("data-icon", icono);
+  }
+}
+
+function cancelarEdicionIncidencia() {
+  if (selectedIncidentID) {
+    abrirDetalleIncidencia(selectedIncidentID, "personSummaryScreen");
+  } else {
+    goBack();
+  }
+}
+
+function formatearFechaInputSEC2(valor) {
+  if (!valor) return "";
+  const texto = String(valor);
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) return texto.slice(0, 10);
+  const fecha = new Date(texto);
+  if (Number.isNaN(fecha.getTime())) return "";
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+
 
 function readonlyFecha(label, fecha) {
   return `
@@ -1313,6 +1535,123 @@ function guardarEdicionUso() {
     status.className = "status-box show error"; status.textContent = obtenerMensajeError(error);
   });
 }
+
+function guardarEdicionIncidenciaNormal() {
+  const inicio = valorInput("editFechaInicio");
+  const fin = valorInput("editFechaFin");
+  const licencia = valorInput("editLicenciaMedica");
+  const observaciones = valorInput("editObservaciones");
+
+  if (!inicio || !fin) {
+    alert("Debes indicar fecha inicio y fecha fin.");
+    return;
+  }
+
+  if (fin < inicio) {
+    alert("La fecha final no puede ser anterior a la fecha inicial.");
+    return;
+  }
+
+  if (!confirm("¿Confirmas guardar los cambios de esta incidencia?")) return;
+
+  const status = document.getElementById("editUseStatus");
+  status.className = "status-box show";
+  status.textContent = "Guardando cambios...";
+
+  const datos = {
+    FechaInicio: inicio,
+    FechaFin: fin,
+    LicenciaMedica: licencia,
+    Observaciones: observaciones
+  };
+
+  actualizarIncidenciaSEC2(selectedIncidentID, datos, function() {
+    status.className = "status-box show ok";
+    status.textContent = "Cambios guardados correctamente.";
+
+    const personaDestino = selectedDetailPersonID || selectedPersonID || "";
+    setTimeout(function() {
+      detailBackOverride = "";
+      navigationStack = [];
+      if (personaDestino) {
+        profileMode = false;
+        cargarResumenPersona(personaDestino, false);
+      } else {
+        goMain();
+      }
+    }, 800);
+  }, function(error) {
+    status.className = "status-box show error";
+    status.textContent = obtenerMensajeError(error);
+  });
+}
+
+function actualizarIncidenciaSEC2(idIncidencia, datos, ok, fail) {
+  const metodos = [
+    "actualizarIncidencia",
+    "editarIncidencia",
+    "guardarEdicionIncidencia",
+    "guardarCambiosIncidencia"
+  ];
+
+  for (const nombre of metodos) {
+    if (API && typeof API[nombre] === "function") {
+      try {
+        API[nombre](idIncidencia, datos, ok, fail);
+        return;
+      } catch (error) {
+        console.warn("No se pudo usar API." + nombre, error);
+      }
+    }
+  }
+
+  actualizarIncidenciaDirectoSupabaseSEC2(idIncidencia, datos)
+    .then(ok)
+    .catch(fail);
+}
+
+async function actualizarIncidenciaDirectoSupabaseSEC2(idIncidencia, datos) {
+  const cliente = obtenerClienteSupabaseNotificacionesSEC2();
+  if (!cliente) throw new Error("No se detectó cliente Supabase para editar la incidencia.");
+
+  const payloads = [
+    {
+      FechaInicio: datos.FechaInicio,
+      FechaFin: datos.FechaFin,
+      LicenciaMedica: datos.LicenciaMedica,
+      Observaciones: datos.Observaciones
+    },
+    {
+      fecha_inicio: datos.FechaInicio,
+      fecha_fin: datos.FechaFin,
+      licencia_medica: datos.LicenciaMedica,
+      observaciones: datos.Observaciones
+    }
+  ];
+
+  const filtros = ["IDIncidencia", "id_incidencia", "id"];
+  let ultimoError = null;
+
+  for (const tabla of ["incidencias", "Incidencias"]) {
+    for (const payload of payloads) {
+      for (const filtro of filtros) {
+        try {
+          const resultado = await cliente.from(tabla).update(payload).eq(filtro, idIncidencia);
+          if (resultado.error) {
+            ultimoError = resultado.error;
+            continue;
+          }
+          return true;
+        } catch (error) {
+          ultimoError = error;
+        }
+      }
+    }
+  }
+
+  throw ultimoError || new Error("No se pudo actualizar la incidencia.");
+}
+
 
 function valorInput(id) {
   const el = document.getElementById(id); return el ? el.value : "";
