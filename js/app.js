@@ -5523,3 +5523,4 @@ function limpiarTextoPDF(valor) {
 function obtenerMensajeError(err) {
   return err.message || err;
 }
+
