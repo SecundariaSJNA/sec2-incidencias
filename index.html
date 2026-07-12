@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <style>
-    /* SEC2_INDEX_V50_PDF_FIRMAS_COMPROBANTE_NOTIF_FIX_20260711 */
+    /* SEC2_INDEX_V52_CONFIG_PASSWORD_GALA_20260712 */
     .profile-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1228,6 +1228,25 @@
       pointer-events: none !important;
     }
 
+  
+    .secondary-button {
+      width: 100%;
+      border: 0;
+      border-radius: 20px;
+      padding: 16px 20px;
+      margin: 10px 0;
+      font-size: 15px;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: #1f2937;
+      background: #eef2f7;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    }
+
+    .secondary-button:active {
+      transform: scale(0.99);
+    }
+
   </style>
 </head>
 
@@ -1550,14 +1569,14 @@
           <button class="top-back" onclick="goBack()">←</button>
 
           <div class="brand-row">
-            <div class="brand-icon solid-purple" data-icon="permiso-oficial"></div>
+            <div id="editUseIcon" class="brand-icon solid-purple" data-icon="permiso-oficial"></div>
             <div class="brand-logo">
               <img class="logo-real" src="https://raw.githubusercontent.com/SecSJNA/sec2-app/d810700d427ea454662ff6e4836c4d6431cb8115/logoPng.png" alt="Sec2">
             </div>
           </div>
 
-          <h1 class="page-title color-purple">Permiso oficial</h1>
-          <p class="page-subtitle">Editar fechas de uso pendientes</p>
+          <h1 id="editUseTitle" class="page-title color-purple">Permiso oficial</h1>
+          <p id="editUseSubtitle" class="page-subtitle">Editar fechas de uso pendientes</p>
 
           <div id="editUseContent"></div>
 
@@ -2146,4 +2165,3 @@
   </script>
 </body>
 </html>
-
